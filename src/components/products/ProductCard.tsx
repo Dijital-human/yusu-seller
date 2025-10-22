@@ -51,12 +51,18 @@ export function ProductCard({
 }: ProductCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isInWishlist, setIsInWishlist] = useState(false);
-  const { addToCart, isInCart } = useCart();
+  const { addItem, state } = useCart();
 
   const handleAddToCart = async () => {
     setIsLoading(true);
     try {
-      await addToCart(product.id, 1);
+      addItem({
+        id: product.id,
+        name: product.name,
+        price: Number(product.price),
+        image: product.images,
+        sellerId: product.seller?.name || "Unknown"
+      });
       if (onAddToCart) {
         onAddToCart(product.id);
       }
@@ -82,6 +88,7 @@ export function ProductCard({
 
   const isOutOfStock = product.stock === 0;
   const discountPercentage = 0; // This would come from product data / Bu məhsul məlumatından gələcək
+  const isInCart = state.items.some(item => item.id === product.id);
 
   return (
     <Card className="group cursor-pointer hover:shadow-lg transition-all duration-300 overflow-hidden">
@@ -227,7 +234,7 @@ export function ProductCard({
             </div>
           ) : isOutOfStock ? (
             "Out of Stock / Stokda Yox"
-          ) : isInCart(product.id) ? (
+           ) : isInCart ? (
             "In Cart / Səbətdə"
           ) : (
             <>

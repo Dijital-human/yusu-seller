@@ -64,7 +64,7 @@ export function usePermissions() {
       ],
     };
 
-    const userPermissions = rolePermissions[user.role] || [];
+    const userPermissions = rolePermissions[user.role as keyof typeof rolePermissions] || [];
     
     return userPermissions.some(perm => 
       (perm.action === "*" && perm.resource === "*") ||

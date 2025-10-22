@@ -32,7 +32,6 @@ export const authOptions: NextAuthOptions = {
   // Pages configuration / Səhifələr konfiqurasiyası
   pages: {
     signIn: "/auth/signin",
-    signUp: "/auth/signup",
     error: "/auth/error",
   },
   
