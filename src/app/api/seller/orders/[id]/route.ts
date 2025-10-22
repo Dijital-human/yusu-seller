@@ -80,6 +80,10 @@ export async function GET(
       return NextResponse.json({ message: "Order not found / Sifariş tapılmadı" }, { status: 404 });
     }
 
+    if (!session?.user?.id) {
+      return NextResponse.json({ message: "Unauthorized / İcazə yoxdur" }, { status: 401 });
+    }
+
     if (order.sellerId !== session.user.id) {
       return NextResponse.json({ message: "Unauthorized to view this order / Bu sifarişə baxmaq üçün icazəniz yoxdur" }, { status: 403 });
     }
