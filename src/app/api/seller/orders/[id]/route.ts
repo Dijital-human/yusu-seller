@@ -112,8 +112,8 @@ export async function GET(
           images: item.product.images,
         },
         quantity: item.quantity,
-        price: item.price,
-        total: item.quantity * item.price,
+        price: Number(item.price),
+        total: item.quantity * Number(item.price),
       })),
     };
 
