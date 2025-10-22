@@ -1,0 +1,23 @@
+# Yusu E-commerce .dockerignore / Yusu E-commerce .dockerignore
+# Docker build zamanı nəyi ignore etməli / What to ignore during Docker build
+
+Dockerfile
+.dockerignore
+node_modules
+npm-debug.log
+README.md
+.env
+.env.local
+.env.production.local
+.env.development.local
+.git
+.gitignore
+.next
+.vercel
+coverage
+.nyc_output
+.cache
+dist
+build
+.DS_Store
+*.log
