@@ -253,10 +253,12 @@ enum UserRole {
 
 enum OrderStatus {
   PENDING
+  PREPARING
   CONFIRMED
   SHIPPED
   DELIVERED
   CANCELLED
+  PENDING_APPROVAL
 }
 
 enum VehicleType {
