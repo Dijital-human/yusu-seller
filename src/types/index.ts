@@ -15,6 +15,9 @@ export interface User {
   role: UserRole;
   phone?: string;
   isActive: boolean;
+  passwordHash?: string; // Parol hash-i (opsiyonal)
+  resetToken?: string; // Reset token (opsiyonal)
+  resetTokenExpiry?: Date; // Reset token müddəti (opsiyonal)
   createdAt: Date;
   updatedAt: Date;
 }

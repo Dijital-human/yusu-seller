@@ -152,7 +152,7 @@ export function CartProvider({ children }: CartProviderProps) {
 
   // Add item to cart / Səbətə məhsul əlavə et
   const addItem = (item: Omit<CartItem, 'quantity'>) => {
-    dispatch({ type: 'ADD_ITEM', payload: item });
+    dispatch({ type: 'ADD_ITEM', payload: { ...item, quantity: 1 } });
   };
 
   // Remove item from cart / Səbətdən məhsulu çıxar

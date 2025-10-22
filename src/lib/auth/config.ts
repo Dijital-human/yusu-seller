@@ -81,8 +81,8 @@ export const authOptions: NextAuthOptions = {
           }
           
           // Check password if user has one / Əgər istifadəçinin parolu varsa yoxla
-          if (user.passwordHash) {
-            const isValidPassword = await compare(password, user.passwordHash);
+          if ((user as any).passwordHash) {
+            const isValidPassword = await compare(password, (user as any).passwordHash);
             if (!isValidPassword) {
               return null;
             }
@@ -159,23 +159,23 @@ export const authOptions: NextAuthOptions = {
           });
           
           // Determine role based on email / Email-ə görə rol təyin et
-          let userRole = UserRole.CUSTOMER; // Default role / Varsayılan rol
+          let userRole: UserRole = "CUSTOMER"; // Default role / Varsayılan rol
           
           if (user.email === "admin@yusu.com") {
-            userRole = UserRole.ADMIN;
+            userRole = "ADMIN";
           } else if (user.email === "seller1@yusu.com" || user.email === "seller2@yusu.com") {
-            userRole = UserRole.SELLER;
+            userRole = "SELLER";
           } else if (user.email === "courier1@yusu.com" || user.email === "courier2@yusu.com") {
-            userRole = UserRole.COURIER;
+            userRole = "COURIER";
           } else if (user.email?.includes("test-seller")) {
             // Test üçün: email-də "test-seller" varsa SELLER rol ver
-            userRole = UserRole.SELLER;
+            userRole = "SELLER";
           } else if (user.email?.includes("test-admin")) {
             // Test üçün: email-də "test-admin" varsa ADMIN rol ver
-            userRole = UserRole.ADMIN;
+            userRole = "ADMIN";
           } else if (user.email?.includes("test-courier")) {
             // Test üçün: email-də "test-courier" varsa COURIER rol ver
-            userRole = UserRole.COURIER;
+            userRole = "COURIER";
           }
           
           if (!existingUser) {

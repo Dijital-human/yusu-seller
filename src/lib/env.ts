@@ -198,16 +198,4 @@ export const getNotificationConfig = () => {
   };
 };
 
-// Export all helpers / Bütün köməkçiləri export et
-export {
-  getSellerSessionTimeout,
-  getSellerMaxLoginAttempts,
-  getSellerLogLevel,
-  isSellerAuditLogEnabled,
-  getSellerPanelConfig,
-  getProductManagementConfig,
-  getOrderManagementConfig,
-  getCommissionConfig,
-  getInventoryConfig,
-  getNotificationConfig,
-};
+// All functions are already exported above / Bütün funksiyalar yuxarıda export edilib
