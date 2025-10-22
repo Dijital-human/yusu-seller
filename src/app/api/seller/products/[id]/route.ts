@@ -49,7 +49,7 @@ export async function DELETE(
       
       sellerId = testSeller.id;
     } else {
-      sellerId = session.user.id;
+      sellerId = session?.user?.id;
     }
 
     const { id: productId } = await params;
@@ -64,7 +64,11 @@ export async function DELETE(
       return NextResponse.json({ message: "Product not found / Məhsul tapılmadı" }, { status: 404 });
     }
 
-    if (existingProduct.sellerId !== session.user.id) {
+    if (!session?.user?.id) {
+      return NextResponse.json({ message: "Unauthorized / İcazə yoxdur" }, { status: 401 });
+    }
+
+    if (existingProduct.sellerId !== session?.user?.id) {
       return NextResponse.json({ message: "Unauthorized to delete this product / Bu məhsulu silmək üçün icazəniz yoxdur" }, { status: 403 });
     }
 
@@ -116,7 +120,7 @@ export async function GET(
       
       sellerId = testSeller.id;
     } else {
-      sellerId = session.user.id;
+      sellerId = session?.user?.id;
     }
 
     const { id: productId } = await params;
@@ -137,7 +141,7 @@ export async function GET(
       return NextResponse.json({ message: "Product not found / Məhsul tapılmadı" }, { status: 404 });
     }
 
-    if (product.sellerId !== session.user.id) {
+    if (product.sellerId !== session?.user?.id) {
       return NextResponse.json({ message: "Unauthorized to view this product / Bu məhsula baxmaq üçün icazəniz yoxdur" }, { status: 403 });
     }
 
@@ -182,7 +186,7 @@ export async function PUT(
       
       sellerId = testSeller.id;
     } else {
-      sellerId = session.user.id;
+      sellerId = session?.user?.id;
     }
 
     const { id: productId } = await params;
@@ -210,7 +214,7 @@ export async function PUT(
       return NextResponse.json({ error: "Product not found / Məhsul tapılmadı" }, { status: 404 });
     }
 
-    if (existingProduct.sellerId !== session.user.id) {
+    if (existingProduct.sellerId !== session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized to update this product / Bu məhsulu yeniləmək üçün icazəniz yoxdur" }, { status: 403 });
     }
 

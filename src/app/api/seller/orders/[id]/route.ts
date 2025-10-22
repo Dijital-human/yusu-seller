@@ -45,7 +45,7 @@ export async function GET(
       
       sellerId = testSeller.id;
     } else {
-      sellerId = session.user.id;
+      sellerId = session?.user?.id;
     }
 
     const { id: orderId } = await params;
@@ -84,7 +84,7 @@ export async function GET(
       return NextResponse.json({ message: "Unauthorized / İcazə yoxdur" }, { status: 401 });
     }
 
-    if (order.sellerId !== session.user.id) {
+    if (order.sellerId !== session?.user?.id) {
       return NextResponse.json({ message: "Unauthorized to view this order / Bu sifarişə baxmaq üçün icazəniz yoxdur" }, { status: 403 });
     }
 
@@ -158,7 +158,7 @@ export async function PUT(
       
       sellerId = testSeller.id;
     } else {
-      sellerId = session.user.id;
+      sellerId = session?.user?.id;
     }
 
     const { id: orderId } = await params;
@@ -190,7 +190,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized / İcazə yoxdur" }, { status: 401 });
     }
 
-    if (existingOrder.sellerId !== session.user.id) {
+    if (existingOrder.sellerId !== session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized to update this order / Bu sifarişi yeniləmək üçün icazəniz yoxdur" }, { status: 403 });
     }
 

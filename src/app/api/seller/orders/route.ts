@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       
       sellerId = testSeller.id;
     } else {
-      sellerId = session.user.id;
+      sellerId = session?.user?.id;
     }
 
     const { searchParams } = new URL(request.url);

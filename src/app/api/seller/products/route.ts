@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       
       sellerId = testSeller.id;
     } else {
-      sellerId = session.user.id;
+      sellerId = session?.user?.id;
     }
 
     const { searchParams } = new URL(request.url);
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
       
       sellerId = testSeller.id;
     } else {
-      sellerId = session.user.id;
+      sellerId = session?.user?.id;
     }
 
     const body = await request.json();
