@@ -186,6 +186,10 @@ export async function PUT(
       return NextResponse.json({ error: "Order not found / Sifariş tapılmadı" }, { status: 404 });
     }
 
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized / İcazə yoxdur" }, { status: 401 });
+    }
+
     if (existingOrder.sellerId !== session.user.id) {
       return NextResponse.json({ error: "Unauthorized to update this order / Bu sifarişi yeniləmək üçün icazəniz yoxdur" }, { status: 403 });
     }
