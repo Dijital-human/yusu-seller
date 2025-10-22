@@ -31,7 +31,7 @@ import {
   FileVideo,
   Edit,
   Settings,
-  BarChart3,
+  BarChart,
   DollarSign,
   Package2,
   Tag,

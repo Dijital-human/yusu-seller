@@ -23,7 +23,7 @@ import {
   Eye,
   Calendar,
   DollarSign,
-  BarChart3,
+  BarChart,
   Filter,
   Search
 } from "lucide-react";

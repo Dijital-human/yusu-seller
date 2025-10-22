@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
-  BarChart3,
+  BarChart,
   TrendingUp,
   TrendingDown,
   DollarSign,

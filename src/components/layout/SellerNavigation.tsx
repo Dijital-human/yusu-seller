@@ -10,7 +10,7 @@ import {
   LayoutDashboard,
   Package,
   ShoppingCart,
-  BarChart3,
+  BarChart,
   Settings,
   Plus,
   LogOut,
@@ -57,7 +57,7 @@ const navigationItems = [
     name: "Analytics",
     nameAz: "Analitika",
     href: "/seller/analytics",
-    icon: BarChart3,
+    icon: BarChart,
     badge: null,
   },
   {
@@ -93,7 +93,7 @@ const quickActions = [
     name: "Analytics",
     nameAz: "Analitika",
     href: "/seller/analytics",
-    icon: BarChart3,
+    icon: BarChart,
   },
 ];
 

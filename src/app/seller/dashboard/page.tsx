@@ -18,7 +18,7 @@ import {
   Eye,
   Users,
   Truck,
-  BarChart3,
+  BarChart,
   Target,
   Clock,
   Star,
@@ -402,7 +402,7 @@ export default function SellerDashboard() {
                 className="border-blue-200 text-blue-700 hover:bg-blue-50 shadow-md hover:shadow-lg transition-all duration-300"
                 onClick={() => router.push('/seller/analytics')}
               >
-                <BarChart3 className="h-5 w-5 mr-2" />
+                <BarChart className="h-5 w-5 mr-2" />
                 View Analytics
               </Button>
             </div>
@@ -620,7 +620,7 @@ export default function SellerDashboard() {
               onClick={() => router.push('/seller/analytics')}
               className="h-20 flex flex-col items-center justify-center space-y-2 bg-white hover:bg-gray-50 border-2 border-dashed border-gray-300 hover:border-orange-400"
               >
-              <BarChart3 className="h-6 w-6 text-gray-600" />
+              <BarChart className="h-6 w-6 text-gray-600" />
               <span className="text-sm font-medium text-gray-700">View Analytics / Analitikaya Bax</span>
               </Button>
             </div>

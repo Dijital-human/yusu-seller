@@ -15,7 +15,7 @@ import {
   Plus,
   Eye,
   Settings,
-  BarChart3
+  BarChart
 } from "lucide-react";
 
 export default function SellerPage() {
