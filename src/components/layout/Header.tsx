@@ -28,7 +28,27 @@ export function Header() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const { user, isAuthenticated, handleSignOut } = useAuth();
-  // const { canAccess } = usePermissions();
+  
+  // Simple access control function
+  const canAccess = (path: string) => {
+    if (!user) return false;
+    
+    switch (path) {
+      case "/orders":
+      case "/sifarişlər":
+        return user.role === "SELLER" || user.role === "ADMIN";
+      case "/products":
+      case "/məhsullar":
+        return user.role === "SELLER" || user.role === "ADMIN";
+      case "/analytics":
+      case "/analitika":
+        return user.role === "SELLER" || user.role === "ADMIN";
+      case "/dashboard":
+        return user.role === "SELLER" || user.role === "ADMIN";
+      default:
+        return true;
+    }
+  };
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
