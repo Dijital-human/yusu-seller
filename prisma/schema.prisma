@@ -160,6 +160,7 @@ model Order {
   totalAmount     Decimal
   shippingAddress String // JSON string of address
   addressId       String? // Reference to Address model
+  notes           String? // Order notes
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
