@@ -12,29 +12,99 @@ datasource db {
 
 // User Model / İstifadəçi Modeli
 model User {
-  id               String    @id @default(cuid())
-  email            String    @unique
-  name             String?
-  image            String?
-  role             UserRole  @default(CUSTOMER)
-  phone            String?
-  isActive         Boolean   @default(true)
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  image     String?
+  role      UserRole @default(CUSTOMER)
+  phone     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Admin specific fields / Admin xüsusi sahələri
+  adminRole   String? // SUPER_ADMIN, SYSTEM_ADMIN, etc.
+  permissions String? // JSON string of custom permissions
+  notes       String? // Admin notes about user
+
+  // User blocking fields / İstifadəçi bloklama sahələri
+  isBlocked     Boolean?
+  blockReason   String?
+  blockType     String? // ACCOUNT, LOGIN, PURCHASE, SELL, DELIVER
+  blockSeverity String? // LOW, MEDIUM, HIGH, CRITICAL
+  blockedAt     DateTime?
+  blockedUntil  DateTime?
+  blockedBy     String?
+  unblockedAt   DateTime?
+  unblockedBy   String?
+
+  // Password reset fields / Şifrə sıfırlama sahələri
   resetToken       String?
   resetTokenExpiry DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  passwordHash     String?
+
+  // Seller hierarchy fields / Satıcı iyerarxiyası sahələri
+  sellerType        String? // SUPER_SELLER or USER_SELLER / SUPER_SELLER və ya USER_SELLER
+  superSellerId      String? // Reference to Super Seller (for User Sellers) / Super Seller-ə istinad (User Seller-lər üçün)
+  sellerPermissions  String? // JSON string of granular permissions / Granular icazələrin JSON string-i
+  isApprovedByAdmin  Boolean   @default(false) // Admin təsdiqi (Super Seller üçün) / Admin approval (for Super Sellers)
+  approvedAt         DateTime? // Təsdiq tarixi / Approval date
+  approvedBy         String? // Admin ID who approved / Təsdiq edən admin ID
+  
+  // Seller business documents / Satıcı biznes sənədləri
+  businessLicense    String? // Business license file URL / Biznes lisenziyası fayl URL-i
+  taxCertificate     String? // Tax certificate file URL / Vergi şəhadətnaməsi fayl URL-i
+  businessName       String? // Business name / Biznes adı
+  businessType       String? // Business type (RETAIL, WHOLESALE, ONLINE, MANUFACTURER) / Biznes tipi
+  businessAddress    String? // Business address / Biznes ünvanı
+  businessDescription String? // Business description / Biznes təsviri
+
+  // Settings fields / Tənzimləmə sahələri
+  notificationPreferences String? // JSON string of notification preferences / Bildiriş seçimlərinin JSON string-i
+  lowStockThreshold       Int?    @default(10) // Low stock threshold for alerts / Xəbərdarlıqlar üçün aşağı stok həddi
 
   // Relations / Əlaqələr
   accounts      Account[]
   sessions      Session[]
   addresses     Address[]
   cartItems     CartItem[]
-  orders        Order[]    @relation("CustomerOrders")
-  sellerOrders  Order[]    @relation("SellerOrders")
-  courierOrders Order[]    @relation("CourierOrders")
+  orders        Order[]        @relation("CustomerOrders")
+  sellerOrders  Order[]        @relation("SellerOrders")
+  courierOrders Order[]        @relation("CourierOrders")
   products      Product[]
   courier       Courier?
   reviews       Review[]
+  wishlistItems WishlistItem[]
+
+  // Admin relations / Admin əlaqələri
+  blockedUsers    User[]     @relation("UserBlocking")
+  blockedByUser   User?      @relation("UserBlocking", fields: [blockedBy], references: [id])
+  unblockedUsers  User[]     @relation("UserUnblocking")
+  unblockedByUser User?      @relation("UserUnblocking", fields: [unblockedBy], references: [id])
+  createdBackups  Backup[]
+  auditLogs       AuditLog[]
+
+  // Seller hierarchy relations / Satıcı iyerarxiyası əlaqələri
+  superSeller     User?  @relation("SellerHierarchy", fields: [superSellerId], references: [id])
+  userSellers     User[] @relation("SellerHierarchy")
+  approvedByUser  User?  @relation("SellerApproval", fields: [approvedBy], references: [id])
+  approvedSellers User[] @relation("SellerApproval")
+
+  // Storage relations / Storage əlaqələri
+  storageSubscription StorageSubscription?
+  storageTransactions StorageTransaction[]
+
+  // Marketing relations / Marketinq əlaqələri
+  discountCodes DiscountCode[]
+  flashSales    FlashSale[]
+  promotions    Promotion[]
+
+  // Warehouse relations / Anbar əlaqələri
+  warehouses Warehouse[]
+
+  // Seller messages relations / Satıcı mesajları əlaqələri
+  sellerMessages SellerMessage[] @relation("SellerMessages")
+  adminReplies   SellerMessage[] @relation("AdminReplies")
 
   @@map("users")
 }
@@ -102,30 +172,65 @@ model Category {
 
 // Product Model / Məhsul Modeli
 model Product {
-  id          String   @id @default(cuid())
-  name        String
-  description String
-  price       Decimal
-  images      String
-  categoryId  String
-  sellerId    String
-  stock       Int      @default(0)
-  isActive    Boolean  @default(true)
-  isPublished Boolean  @default(false)
-  isApproved  Boolean  @default(false)
-  publishedAt DateTime?
-  approvedAt  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String    @id @default(cuid())
+  name          String
+  description   String
+  price         Decimal
+  originalPrice Decimal?
+  purchasePrice Decimal? // Alış qiyməti (User Seller üçün görünməz ola bilər) / Purchase price (may be hidden for User Sellers)
+  barcode       String?   @unique // Barkod nömrəsi / Barcode number
+  images        String
+  categoryId    String
+  sellerId      String
+  stock         Int       @default(0)
+  isActive      Boolean   @default(true)
+  isPublished   Boolean   @default(false)
+  isApproved    Boolean   @default(false)
+  publishedAt   DateTime?
+  approvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // Relations / Əlaqələr
-  category   Category    @relation(fields: [categoryId], references: [id])
-  seller     User        @relation(fields: [sellerId], references: [id])
-  orderItems OrderItem[]
-  cartItems  CartItem[]
-  reviews    Review[]
+  category               Category             @relation(fields: [categoryId], references: [id])
+  seller                 User                 @relation(fields: [sellerId], references: [id])
+  orderItems             OrderItem[]
+  cartItems              CartItem[]
+  reviews                Review[]
+  wishlistItems          WishlistItem[]
+  variants               ProductVariant[]
+  warehouseStocks        WarehouseStock[]
+  warehouseOperations    WarehouseOperation[]
+  warehouseLedgerEntries WarehouseLedger[]
+  flashSales             FlashSale[]
 
+  @@index([barcode])
   @@map("products")
+}
+
+// Product Variant Model / Məhsul Variantı Modeli
+model ProductVariant {
+  id         String   @id @default(cuid())
+  productId  String
+  name       String // "Color: Red, Size: Large"
+  sku        String?  @unique
+  barcode    String?  @unique // Variant üçün barkod / Barcode for variant
+  price      Decimal? // Variant-specific price (optional, uses product price if null)
+  stock      Int      @default(0)
+  attributes String // JSON string: {"color": "red", "size": "large"}
+  image      String? // Variant-specific image
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations / Əlaqələr
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@index([productId])
+  @@index([sku])
+  @@index([barcode])
+  @@map("product_variants")
 }
 
 // Address Model / Ünvan Modeli
@@ -160,16 +265,20 @@ model Order {
   totalAmount     Decimal
   shippingAddress String // JSON string of address
   addressId       String? // Reference to Address model
-  notes           String? // Order notes
+  paymentIntentId String? // Stripe payment intent ID
+  paymentStatus   String? // Payment status (PENDING, PAID, FAILED)
+  paidAt          DateTime? // Payment completion date
+  notes           String? // Order notes/comments / Sifariş qeydləri/şərhləri
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
   // Relations / Əlaqələr
-  customer User        @relation("CustomerOrders", fields: [customerId], references: [id])
-  seller   User        @relation("SellerOrders", fields: [sellerId], references: [id])
-  courier  User?       @relation("CourierOrders", fields: [courierId], references: [id])
-  address  Address?    @relation(fields: [addressId], references: [id])
-  items    OrderItem[]
+  customer      User                 @relation("CustomerOrders", fields: [customerId], references: [id])
+  seller        User                 @relation("SellerOrders", fields: [sellerId], references: [id])
+  courier       User?                @relation("CourierOrders", fields: [courierId], references: [id])
+  statusHistory OrderStatusHistory[] // Status change history / Status dəyişiklik tarixçəsi
+  address       Address?             @relation(fields: [addressId], references: [id])
+  items         OrderItem[]
 
   @@map("orders")
 }
@@ -179,14 +288,33 @@ model OrderItem {
   id        String  @id @default(cuid())
   orderId   String
   productId String
+  variantId String? // Optional variant reference
   quantity  Int
   price     Decimal
 
   // Relations / Əlaqələr
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
 
   @@map("order_items")
+}
+
+// Order Status History Model / Sifariş Status Tarixçəsi Modeli
+model OrderStatusHistory {
+  id             String       @id @default(cuid())
+  orderId        String
+  status         OrderStatus
+  previousStatus OrderStatus?
+  changedBy      String // User ID who changed the status / Statusu dəyişən istifadəçinin ID-si
+  notes          String? // Optional notes about the status change / Status dəyişikliyi haqqında qeydlər
+  createdAt      DateTime     @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("order_status_history")
 }
 
 // Cart Item Model / Səbət Elementi Modeli
@@ -244,23 +372,41 @@ model Review {
   @@map("reviews")
 }
 
+// Wishlist Item Model / İstək Siyahısı Elementi Modeli
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations / Əlaqələr
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("wishlist_items")
+}
+
 // Enums / Enum-lar
 enum UserRole {
   CUSTOMER
   SELLER
+  SUPER_SELLER // Super Seller / Super Satıcı
+  USER_SELLER // User Seller / İstifadəçi Satıcı
   COURIER
   ADMIN
 }
 
 enum OrderStatus {
   PENDING
-  PROCESSING
-  PREPARING
+  PENDING_PAYMENT
   CONFIRMED
+  PREPARING
   SHIPPED
   DELIVERED
   CANCELLED
-  PENDING_APPROVAL
+  PAYMENT_FAILED
 }
 
 enum VehicleType {
@@ -268,4 +414,302 @@ enum VehicleType {
   MOTORCYCLE
   CAR
   VAN
+}
+
+// Site Settings Model / Sayt Tənzimləri Modeli
+model SiteSetting {
+  id          String   @id @default(cuid())
+  category    String // theme, layout, navigation, banners, footer, header
+  key         String
+  value       String // JSON string
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([category, key], name: "category_key")
+  @@map("site_settings")
+}
+
+// Backup Model / Backup Modeli
+model Backup {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  type        String // FULL, INCREMENTAL, DIFFERENTIAL
+  status      BackupStatus @default(IN_PROGRESS)
+  size        Int          @default(0)
+  metadata    String? // JSON string
+  filePath    String?
+  userId      String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations / Əlaqələr
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("backups")
+}
+
+// Audit Log Model / Audit Log Modeli
+model AuditLog {
+  id           String   @id @default(cuid())
+  userId       String
+  action       String // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
+  resourceType String // USER, PRODUCT, ORDER, CATEGORY, etc.
+  resourceId   String?
+  details      String? // JSON string
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  // Relations / Əlaqələr
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// Enums / Enumlar
+enum BackupStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  RESTORING
+  RESTORE_FAILED
+}
+
+// Warehouse Operation Type / Anbar Əməliyyatı Tipi
+enum WarehouseOperationType {
+  INCOMING // Giriş / Incoming stock
+  OUTGOING // Çıxış / Outgoing stock
+  TRANSFER // Transfer / Transfer between warehouses
+  ADJUSTMENT // Düzəliş / Stock adjustment
+}
+
+// Warehouse Model / Anbar Modeli
+model Warehouse {
+  id        String   @id @default(cuid())
+  sellerId  String // Super Seller ID
+  name      String
+  address   String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seller        User                 @relation(fields: [sellerId], references: [id])
+  operations    WarehouseOperation[]
+  stockItems    WarehouseStock[]
+  ledgerEntries WarehouseLedger[]
+
+  @@map("warehouses")
+}
+
+// Warehouse Stock Model / Anbar Stoku Modeli
+model WarehouseStock {
+  id          String   @id @default(cuid())
+  warehouseId String
+  productId   String
+  quantity    Int      @default(0)
+  minStock    Int      @default(0)
+  maxStock    Int?
+  location    String? // Rack, Shelf, etc. / Raf, Rəf və s.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, productId])
+  @@map("warehouse_stocks")
+}
+
+// Warehouse Operation Model / Anbar Əməliyyatı Modeli
+model WarehouseOperation {
+  id          String                 @id @default(cuid())
+  warehouseId String
+  productId   String
+  type        WarehouseOperationType
+  quantity    Int
+  reason      String? // Reason for operation / Əməliyyat səbəbi
+  referenceId String? // Order ID, Transfer ID, etc. / Sifariş ID, Transfer ID və s.
+  performedBy String // User ID who performed operation / Əməliyyatı yerinə yetirən istifadəçi ID
+  createdAt   DateTime               @default(now())
+
+  warehouse     Warehouse         @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product       Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ledgerEntries WarehouseLedger[]
+
+  @@map("warehouse_operations")
+}
+
+// Warehouse Ledger Model / Anbar Hesab Kitabı Modeli
+model WarehouseLedger {
+  id           String   @id @default(cuid())
+  warehouseId  String
+  productId    String
+  operationId  String
+  date         DateTime @default(now())
+  type         String // INCOMING, OUTGOING, TRANSFER, ADJUSTMENT
+  quantity     Int
+  unitPrice    Decimal // Alış qiyməti / Purchase price
+  totalValue   Decimal // quantity * unitPrice
+  balanceQty   Int // Qalıq miqdar / Remaining quantity
+  balanceValue Decimal // Qalıq dəyər / Remaining value
+  performedBy  String // User ID
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  warehouse Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product   Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  operation WarehouseOperation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  @@index([warehouseId])
+  @@index([productId])
+  @@index([date])
+  @@index([operationId])
+  @@map("warehouse_ledger")
+}
+
+// Storage Plan Model / Storage Plan Modeli
+model StoragePlan {
+  id              String   @id @default(cuid())
+  name            String // FREE, BASIC, PREMIUM, ENTERPRISE
+  maxStorage      Int // MB cinsindən / In MB
+  maxSuperSellers Int // Maksimum Super Seller sayı / Maximum Super Seller count
+  maxUserSellers  Int // Maksimum User Seller sayı / Maximum User Seller count
+  price           Decimal? // Aylıq qiymət (null = pulsuz) / Monthly price (null = free)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subscriptions StorageSubscription[]
+
+  @@map("storage_plans")
+}
+
+// Storage Subscription Model / Storage Abunəliyi Modeli
+model StorageSubscription {
+  id          String    @id @default(cuid())
+  sellerId    String    @unique // Super Seller ID
+  planId      String
+  storageUsed Int       @default(0) // MB cinsindən / In MB
+  startDate   DateTime  @default(now())
+  endDate     DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  seller User        @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  plan   StoragePlan @relation(fields: [planId], references: [id])
+
+  @@map("storage_subscriptions")
+}
+
+// Storage Transaction Model / Storage Əməliyyatı Modeli
+model StorageTransaction {
+  id          String   @id @default(cuid())
+  sellerId    String
+  amount      Int // MB cinsindən (+ və ya -) / In MB (+ or -)
+  type        String // UPLOAD, DELETE, UPGRADE, DOWNGRADE
+  description String?
+  createdAt   DateTime @default(now())
+
+  seller User @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@map("storage_transactions")
+}
+
+// Discount Code Model / Endirim Kodu Modeli
+model DiscountCode {
+  id            String   @id @default(cuid())
+  sellerId      String
+  code          String   @unique // Discount code / Endirim kodu
+  discountType  String // PERCENTAGE or FIXED_AMOUNT / FAİZ və ya SABİT MİQDAR
+  discountValue Decimal // Discount percentage or amount / Endirim faizi və ya miqdarı
+  minPurchase   Decimal? // Minimum purchase amount / Minimum alış məbləği
+  maxDiscount   Decimal? // Maximum discount amount (for percentage) / Maksimum endirim məbləği (faiz üçün)
+  usageLimit    Int? // Maximum number of uses / Maksimum istifadə sayı
+  usedCount     Int      @default(0) // Current usage count / Cari istifadə sayı
+  startDate     DateTime
+  endDate       DateTime
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  seller User @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId])
+  @@index([code])
+  @@index([isActive])
+  @@map("discount_codes")
+}
+
+// Flash Sale Model / Flash Sale Modeli
+model FlashSale {
+  id                 String   @id @default(cuid())
+  sellerId           String
+  productId          String
+  discountPercentage Decimal // Discount percentage / Endirim faizi
+  startDate          DateTime
+  endDate            DateTime
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  seller  User    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId])
+  @@index([productId])
+  @@index([isActive])
+  @@index([startDate, endDate])
+  @@map("flash_sales")
+}
+
+// Promotion Model / Promosiya Modeli
+model Promotion {
+  id            String   @id @default(cuid())
+  sellerId      String
+  name          String
+  description   String?
+  type          String // PERCENTAGE, FIXED_AMOUNT, BUY_X_GET_Y, FREE_SHIPPING
+  discountValue Decimal? // Discount value (for percentage or fixed amount) / Endirim dəyəri (faiz və ya sabit miqdar üçün)
+  minPurchase   Decimal? // Minimum purchase amount / Minimum alış məbləği
+  startDate     DateTime
+  endDate       DateTime
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  seller User @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId])
+  @@index([isActive])
+  @@index([startDate, endDate])
+  @@map("promotions")
+}
+
+// Seller Message Model / Satıcı Mesajı Modeli
+// Model for messages from Super Sellers to Admin / Super Seller-lərdən Adminə mesajlar üçün model
+model SellerMessage {
+  id        String    @id @default(cuid())
+  sellerId  String // Super Seller ID / Super Seller ID
+  subject   String // Message subject / Mesaj başlığı
+  message   String // Message content / Mesaj məzmunu
+  images    String? // JSON array of image URLs / Şəkil URL-lərinin JSON array-i
+  status    String    @default("PENDING") // PENDING, READ, REPLIED, CLOSED
+  priority  String    @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  adminId   String? // Admin ID who replied / Cavab verən admin ID
+  reply     String? // Admin reply / Admin cavabı
+  repliedAt DateTime? // Reply date / Cavab tarixi
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations / Əlaqələr
+  seller User  @relation("SellerMessages", fields: [sellerId], references: [id], onDelete: Cascade)
+  admin  User? @relation("AdminReplies", fields: [adminId], references: [id])
+
+  @@index([sellerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("seller_messages")
 }

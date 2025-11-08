@@ -39,6 +39,7 @@ import {
   Ruler
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
+import { ProductVariants } from "@/components/products/ProductVariants";
 
 // Product update schema / Məhsul yeniləmə sxemi
 const productSchema = z.object({
@@ -138,56 +139,70 @@ export default function EditProductPage() {
     try {
       setIsLoadingProduct(true);
       
-      // Mock product data for testing
-      // Test üçün mock məhsul məlumatları
-      const mockProduct: Product = {
-        id: productId,
-        name: "Premium Wireless Headphones",
-        description: "High-quality wireless headphones with noise cancellation, perfect for music lovers and professionals. Features 30-hour battery life and premium sound quality.",
-        price: 299.99,
-        stock: 25,
-        categoryId: "1",
-        weight: 0.5,
-        dimensions: "20 x 15 x 8 cm",
-        brand: "AudioTech",
-        sku: "ATH-WH-001",
-        isActive: true,
-        images: [
-          "/api/placeholder/400/300",
-          "/api/placeholder/400/300",
-          "/api/placeholder/400/300"
-        ],
-        videos: [
-          "/api/placeholder/400/300"
-        ],
-        createdAt: "2024-01-15T10:30:00Z",
-        updatedAt: "2024-01-20T14:45:00Z"
+      const response = await fetch(`/api/seller/products/${productId}`);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          setError("Product not found / Məhsul tapılmadı");
+          router.push("/seller/products");
+          return;
+        }
+        throw new Error("Failed to load product");
+      }
+      
+      const productData = await response.json();
+      
+      let images: string[] = [];
+      if (productData.images) {
+        try {
+          images = typeof productData.images === 'string' 
+            ? JSON.parse(productData.images) 
+            : productData.images;
+        } catch {
+          images = Array.isArray(productData.images) ? productData.images : [];
+        }
+      }
+      
+      const product: Product = {
+        id: productData.id,
+        name: productData.name,
+        description: productData.description || "",
+        price: parseFloat(productData.price),
+        stock: productData.stock || 0,
+        categoryId: productData.categoryId,
+        weight: productData.weight ? parseFloat(productData.weight) : undefined,
+        dimensions: productData.dimensions || undefined,
+        brand: productData.brand || undefined,
+        sku: productData.sku || undefined,
+        isActive: productData.isActive !== false,
+        images,
+        videos: productData.videos ? (typeof productData.videos === 'string' ? JSON.parse(productData.videos) : productData.videos) : [],
+        createdAt: productData.createdAt,
+        updatedAt: productData.updatedAt,
       };
       
-      setProduct(mockProduct);
+      setProduct(product);
       
-      // Set form values
-      setValue("name", mockProduct.name);
-      setValue("description", mockProduct.description);
-      setValue("price", mockProduct.price);
-      setValue("stock", mockProduct.stock);
-      setValue("categoryId", mockProduct.categoryId);
-      setValue("weight", mockProduct.weight);
-      setValue("dimensions", mockProduct.dimensions);
-      setValue("brand", mockProduct.brand);
-      setValue("sku", mockProduct.sku);
-      setValue("isActive", mockProduct.isActive);
+      setValue("name", product.name);
+      setValue("description", product.description);
+      setValue("price", product.price);
+      setValue("stock", product.stock);
+      setValue("categoryId", product.categoryId);
+      setValue("weight", product.weight);
+      setValue("dimensions", product.dimensions);
+      setValue("brand", product.brand);
+      setValue("sku", product.sku);
+      setValue("isActive", product.isActive);
 
-      // Set existing media files
       const existingMedia: MediaFile[] = [
-        ...mockProduct.images.map((img, index) => ({
+        ...images.map((img, index) => ({
           id: `existing-img-${index}`,
           type: 'image' as const,
           url: img,
           isMain: index === 0,
           isExisting: true
         })),
-        ...mockProduct.videos.map((vid, index) => ({
+        ...(product.videos || []).map((vid, index) => ({
           id: `existing-vid-${index}`,
           type: 'video' as const,
           url: vid,
@@ -208,21 +223,20 @@ export default function EditProductPage() {
 
   const loadCategories = async () => {
     try {
-      // For testing purposes, use mock data
-      // Test məqsədləri üçün mock məlumat istifadə et
-      const mockCategories: Category[] = [
-        { id: "1", name: "Electronics / Elektronika" },
-        { id: "2", name: "Fashion / Moda" },
-        { id: "3", name: "Home & Garden / Ev və Bağ" },
-        { id: "4", name: "Sports / İdman" },
-        { id: "5", name: "Books / Kitablar" },
-        { id: "6", name: "Beauty / Gözəllik" },
-        { id: "7", name: "Toys / Oyuncaqlar" },
-        { id: "8", name: "Automotive / Avtomobil" },
-      ];
-      setCategories(mockCategories);
+      const response = await fetch("/api/categories");
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          setCategories(result.data);
+          return;
+        }
+      }
+      const { MOCK_CATEGORIES } = await import("@/lib/constants/categories");
+      setCategories(MOCK_CATEGORIES);
     } catch (error) {
       console.error("Error loading categories:", error);
+      const { MOCK_CATEGORIES } = await import("@/lib/constants/categories");
+      setCategories(MOCK_CATEGORIES);
     }
   };
 
@@ -293,63 +307,135 @@ export default function EditProductPage() {
     );
   };
 
+  const reorderMediaFiles = (startIndex: number, endIndex: number) => {
+    setMediaFiles(prev => {
+      const result = Array.from(prev);
+      const [removed] = result.splice(startIndex, 1);
+      result.splice(endIndex, 0, removed);
+      
+      const firstImage = result.find(file => file.type === 'image');
+      if (firstImage) {
+        return result.map(file => ({
+          ...file,
+          isMain: file.id === firstImage.id && file.type === 'image'
+        }));
+      }
+      return result;
+    });
+  };
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', index.toString());
+    e.currentTarget.classList.add('opacity-50');
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    const dragIndex = parseInt(e.dataTransfer.getData('text/html'));
+    if (dragIndex !== dropIndex) {
+      reorderMediaFiles(dragIndex, dropIndex);
+    }
+    e.currentTarget.classList.remove('opacity-50');
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    e.currentTarget.classList.remove('opacity-50');
+  };
+
   const onSubmit = async (data: ProductFormData) => {
     try {
       setIsLoading(true);
       setError(null);
       setSuccess(null);
 
-      // Check if at least one image is uploaded
       const hasImages = mediaFiles.some(file => file.type === 'image');
       if (!hasImages) {
-        setError("At least one image is required / Ən azı bir şəkil tələb olunur");
+        setError("At least one image is required");
+        setIsLoading(false);
         return;
       }
 
-      // Prepare form data
-      const formData = new FormData();
-      formData.append('name', data.name);
-      formData.append('description', data.description);
-      formData.append('price', data.price.toString());
-      formData.append('stock', data.stock.toString());
-      formData.append('categoryId', data.categoryId);
-      formData.append('isActive', data.isActive?.toString() || 'true');
-      
-      if (data.weight) formData.append('weight', data.weight.toString());
-      if (data.dimensions) formData.append('dimensions', data.dimensions);
-      if (data.brand) formData.append('brand', data.brand);
-      if (data.sku) formData.append('sku', data.sku);
-
-      // Add media files
-      mediaFiles.forEach((mediaFile, index) => {
-        if (mediaFile.file) {
-          formData.append(`media_${index}`, mediaFile.file);
-          formData.append(`media_type_${index}`, mediaFile.type);
-          formData.append(`media_isMain_${index}`, mediaFile.isMain.toString());
-        }
-      });
-
-      // Simulate API call
-      console.log("Updating product with data:", data);
-      console.log("Media files:", mediaFiles);
-      
-      // Simulate upload progress
       setIsUploading(true);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const uploadedImages: string[] = [];
+      const existingImages: string[] = [];
+
+      for (const mediaFile of mediaFiles) {
+        if (mediaFile.type === 'image') {
+          if (mediaFile.file) {
+            const uploadFormData = new FormData();
+            uploadFormData.append('file', mediaFile.file);
+            uploadFormData.append('type', 'image');
+
+            const uploadResponse = await fetch('/api/upload', {
+              method: 'POST',
+              body: uploadFormData,
+            });
+
+            if (!uploadResponse.ok) {
+              const errorData = await uploadResponse.json();
+              throw new Error(errorData.error || 'Failed to upload image');
+            }
+
+            const uploadData = await uploadResponse.json();
+            uploadedImages.push(uploadData.fileUrl || uploadData.url);
+          } else if (mediaFile.isExisting && mediaFile.url) {
+            existingImages.push(mediaFile.url);
+          }
+        }
+      }
+
+      const allImages = [...existingImages, ...uploadedImages];
+
       setIsUploading(false);
 
-      setSuccess("Product updated successfully! / Məhsul uğurla yeniləndi!");
+      const productData: any = {
+        name: data.name,
+        description: data.description,
+        price: data.price,
+        stock: data.stock,
+        categoryId: data.categoryId,
+        images: allImages,
+        isActive: data.isActive !== false,
+      };
+
+      if (data.weight) productData.weight = data.weight;
+      if (data.dimensions) productData.dimensions = data.dimensions;
+      if (data.brand) productData.brand = data.brand;
+      if (data.sku) productData.sku = data.sku;
+
+      const response = await fetch(`/api/seller/products/${productId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(productData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        const errorMessage = errorData.error || errorData.message || 'Failed to update product';
+        throw new Error(errorMessage);
+      }
+
+      setSuccess("Product updated successfully!");
       
-      // Redirect to products page after 2 seconds
       setTimeout(() => {
         router.push("/seller/products");
       }, 2000);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating product:", error);
-      setError("Failed to update product. Please try again. / Məhsul yeniləmək uğursuz oldu. Yenidən cəhd edin.");
+      setError(error.message || "Failed to update product. Please try again.");
     } finally {
       setIsLoading(false);
+      setIsUploading(false);
     }
   };
 
@@ -603,21 +689,37 @@ export default function EditProductPage() {
                 className="hidden"
               />
 
-              {/* Media Preview */}
+              {/* Uploaded Media / Yüklənmiş Media */}
               {mediaFiles.length > 0 && (
                 <div className="space-y-4">
-                  <h4 className="text-sm font-medium text-gray-700">
-                    Current Media / Hazırkı Media ({mediaFiles.length} files)
-                  </h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium text-gray-700">
+                      Uploaded Media / Yüklənmiş Media ({mediaFiles.length} files)
+                    </h4>
+                    <p className="text-xs text-gray-500">
+                      Drag to reorder / Sıralamaq üçün sürükləyin
+                    </p>
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {mediaFiles.map((mediaFile) => (
-                      <div key={mediaFile.id} className="relative group">
-                        <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 border-2 border-gray-200">
+                    {mediaFiles.map((mediaFile, index) => (
+                      <div
+                        key={mediaFile.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, index)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, index)}
+                        onDragEnd={handleDragEnd}
+                        className="relative group cursor-move transition-all hover:scale-105"
+                      >
+                        <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 border-2 border-gray-200 relative">
                           {mediaFile.type === 'image' ? (
                             <img
                               src={mediaFile.url}
-                              alt="Product media"
+                              alt={`Product image ${index + 1}`}
                               className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = '/placeholder-image.png';
+                              }}
                             />
                           ) : (
                             <video
@@ -626,9 +728,44 @@ export default function EditProductPage() {
                               controls
                             />
                           )}
+                          
+                          {/* Position indicator / Sıra göstəricisi */}
+                          <div className="absolute top-2 left-2 bg-black bg-opacity-70 text-white text-xs font-bold px-2 py-1 rounded">
+                            #{index + 1}
+                          </div>
+
+                          {/* Main image indicator / Əsas şəkil göstəricisi */}
+                          {mediaFile.isMain && mediaFile.type === 'image' && (
+                            <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                              <CheckCircle className="h-3 w-3" />
+                              Main
+                            </div>
+                          )}
+
+                          {/* File type indicator / Fayl tipi göstəricisi */}
+                          <div className="absolute bottom-2 right-2 bg-gray-800 bg-opacity-70 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                            {mediaFile.type === 'image' ? (
+                              <>
+                                <Image className="h-3 w-3" />
+                                Image
+                              </>
+                            ) : (
+                              <>
+                                <Video className="h-3 w-3" />
+                                Video
+                              </>
+                            )}
+                          </div>
+
+                          {/* Existing file indicator / Mövcud fayl göstəricisi */}
+                          {mediaFile.isExisting && (
+                            <div className="absolute bottom-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded">
+                              Existing
+                            </div>
+                          )}
                         </div>
                         
-                        {/* Overlay with actions */}
+                        {/* Overlay with actions / Əməliyyatlar ilə overlay */}
                         <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100">
                           <div className="flex space-x-2">
                             {mediaFile.type === 'image' && (
@@ -637,7 +774,7 @@ export default function EditProductPage() {
                                 size="sm"
                                 variant={mediaFile.isMain ? "default" : "outline"}
                                 onClick={() => setMainImage(mediaFile.id)}
-                                className="text-xs"
+                                className="text-xs bg-white hover:bg-gray-100"
                               >
                                 {mediaFile.isMain ? "Main" : "Set Main"}
                               </Button>
@@ -653,31 +790,15 @@ export default function EditProductPage() {
                             </Button>
                           </div>
                         </div>
-
-                        {/* Main image indicator */}
-                        {mediaFile.isMain && (
-                          <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded">
-                            Main
-                          </div>
-                        )}
-
-                        {/* File type indicator */}
-                        <div className="absolute top-2 right-2 bg-gray-800 text-white text-xs px-2 py-1 rounded">
-                          {mediaFile.type === 'image' ? (
-                            <Image className="h-3 w-3" />
-                          ) : (
-                            <Video className="h-3 w-3" />
-                          )}
-                        </div>
-
-                        {/* Existing file indicator */}
-                        {mediaFile.isExisting && (
-                          <div className="absolute bottom-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded">
-                            Existing
-                          </div>
-                        )}
                       </div>
                     ))}
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-xs text-blue-800">
+                      <strong>Note / Qeyd:</strong> The first image will be displayed as the main product image. 
+                      Drag images to reorder them. / Birinci şəkil məhsulun əsas şəkli kimi göstəriləcək. 
+                      Şəkilləri sıralamaq üçün sürükləyin.
+                    </p>
                   </div>
                 </div>
               )}
@@ -694,6 +815,19 @@ export default function EditProductPage() {
                   <li>• <strong>Size:</strong> Max 10MB per file / Fayl başına maksimum 10MB</li>
                 </ul>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Product Variants */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Tag className="h-5 w-5 mr-2" />
+                Product Variants / Məhsul Variantları
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ProductVariants productId={productId} />
             </CardContent>
           </Card>
 

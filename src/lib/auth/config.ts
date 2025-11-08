@@ -99,6 +99,7 @@ export const authOptions: NextAuthOptions = {
             name: user.name,
             image: user.image,
             role: user.role,
+            isApproved: (user as any).isApproved || (user as any).isApprovedByAdmin || false,
           };
         } catch (error) {
           console.error("Authorization error:", error);
@@ -118,6 +119,7 @@ export const authOptions: NextAuthOptions = {
           ...token,
           role: user.role,
           id: user.id,
+          isApproved: (user as any).isApproved || (user as any).isApprovedByAdmin || false,
         };
       }
       

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
-import { db } from "@/lib/db";
+import { db, reconnectDatabase } from "@/lib/db";
 import { OrderStatus } from "@prisma/client";
+import { getActualSellerId } from "@/lib/warehouse-access";
+import { handleDatabaseError } from "@/lib/db-utils";
 
 // GET /api/seller/orders - Get seller's orders / Satıcının sifarişlərini al
 export async function GET(request: NextRequest) {
@@ -11,14 +13,24 @@ export async function GET(request: NextRequest) {
     
     // Check if user is authenticated and is a seller
     // İstifadəçinin giriş edib-edmədiyini və satıcı olub-olmadığını yoxla
-    let sellerId: string;
+    let currentUserId: string;
     
     if (!session || session.user?.role !== "SELLER") {
       // For testing purposes, use a test seller ID
       // Test məqsədləri üçün test seller ID istifadə et
-      const testSeller = await db.user.findFirst({
-        where: { role: "SELLER" }
-      });
+      let testSeller;
+      try {
+        testSeller = await db.user.findFirst({
+          where: { role: "SELLER" }
+        });
+      } catch (error: any) {
+        const errorResponse = await handleDatabaseError(error, 'GET test seller for orders');
+        if (errorResponse) return errorResponse;
+
+        testSeller = await db.user.findFirst({
+          where: { role: "SELLER" }
+        });
+      }
       
       if (!testSeller) {
         return NextResponse.json(
@@ -27,10 +39,14 @@ export async function GET(request: NextRequest) {
         );
       }
       
-      sellerId = testSeller.id;
+      currentUserId = testSeller.id;
     } else {
-      sellerId = session?.user?.id;
+      currentUserId = session?.user?.id;
     }
+
+    // Get actual seller ID (Super Seller ID for User Sellers)
+    // Həqiqi seller ID-ni al (User Seller-lər üçün Super Seller ID)
+    const { actualSellerId } = await getActualSellerId(currentUserId);
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
@@ -41,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     // Build where clause / Where şərtini qur
     const whereClause: any = {
-      sellerId: sellerId,
+      sellerId: actualSellerId,
     };
 
     // Add status filter if provided / Status filtrini əlavə et
@@ -59,42 +75,85 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Get orders with pagination / Sifarişləri pagination ilə al
-    const orders = await db.order.findMany({
-      where: whereClause,
-      skip,
-      take: limit,
-      include: {
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-        items: {
+    // Get orders with pagination and error handling
+    // Xəta idarəetməsi ilə sifarişləri pagination ilə al
+    let orders, totalCount;
+    try {
+      [orders, totalCount] = await Promise.all([
+        db.order.findMany({
+          where: whereClause,
+          skip,
+          take: limit,
           include: {
-            product: {
+            customer: {
               select: {
                 id: true,
                 name: true,
-                price: true,
-                images: true,
+                email: true,
+                phone: true,
+              },
+            },
+            items: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    price: true,
+                    images: true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+          orderBy: {
+            createdAt: "desc",
+          },
+        }),
+        db.order.count({
+          where: whereClause,
+        }),
+      ]);
+    } catch (error: any) {
+      const errorResponse = await handleDatabaseError(error, 'GET orders');
+      if (errorResponse) return errorResponse;
 
-    // Get total count for pagination / Pagination üçün ümumi sayı al
-    const totalCount = await db.order.count({
-      where: whereClause,
-    });
+      [orders, totalCount] = await Promise.all([
+        db.order.findMany({
+          where: whereClause,
+          skip,
+          take: limit,
+          include: {
+            customer: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+            items: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    price: true,
+                    images: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        }),
+        db.order.count({
+          where: whereClause,
+        }),
+      ]);
+    }
 
     // Format orders for response / Sifarişləri cavab üçün formatla
     const formattedOrders = orders.map((order) => ({
@@ -121,10 +180,13 @@ export async function GET(request: NextRequest) {
         pages: Math.ceil(totalCount / limit),
       },
     });
-  } catch (error) {
-    console.error("Error fetching seller orders:", error);
+  } catch (error: any) {
+    console.error("Error fetching seller orders / Satıcı sifarişlərini əldə etmə xətası:", error);
     return NextResponse.json(
-      { error: "Internal server error / Daxili server xətası" },
+      { 
+        error: "Internal server error / Daxili server xətası",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      },
       { status: 500 }
     );
   }

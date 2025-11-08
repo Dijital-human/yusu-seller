@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { OrderStatus } from "@prisma/client";
 
 export async function PUT(
   request: NextRequest,
@@ -8,7 +9,6 @@ export async function PUT(
   try {
     const { id } = await params;
 
-    // Find the order
     const order = await db.order.findUnique({
       where: { id },
       include: {
@@ -24,24 +24,22 @@ export async function PUT(
 
     if (!order) {
       return NextResponse.json(
-        { error: "Order not found / Sifariş tapılmadı" },
+        { error: "Order not found" },
         { status: 404 }
       );
     }
 
-    // Check if order can be prepared
-    if (order.status !== "PENDING") {
+    if (order.status !== OrderStatus.PENDING) {
       return NextResponse.json(
-        { error: "Order cannot be prepared / Sifariş hazırlana bilməz" },
+        { error: "Order cannot be prepared" },
         { status: 400 }
       );
     }
 
-    // Update order status to PREPARING
     const updatedOrder = await db.order.update({
       where: { id },
       data: {
-        status: "PREPARING",
+        status: OrderStatus.PREPARING,
         updatedAt: new Date()
       },
       include: {
@@ -57,14 +55,14 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      message: "Order is now being prepared / Sifariş hazırlanır",
+      message: "Order is now being prepared",
       order: updatedOrder
     });
 
   } catch (error) {
     console.error("Error preparing order:", error);
     return NextResponse.json(
-      { error: "Internal server error / Server xətası" },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

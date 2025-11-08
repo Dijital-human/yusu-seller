@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { db } from "@/lib/db";
 import { z } from "zod";
+import { getActualSellerId } from "@/lib/warehouse-access";
+import { handleDatabaseError } from "@/lib/db-utils";
 
 // Schema for creating a new product / Yeni məhsul yaratmaq üçün schema
 const productCreateSchema = z.object({
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
     
     // Check if user is authenticated and is a seller
     // İstifadəçinin giriş edib-edmədiyini və satıcı olub-olmadığını yoxla
-    let sellerId: string;
+    let currentUserId: string;
     
     if (!session || session.user?.role !== "SELLER") {
       // For testing purposes, use a test seller ID
@@ -49,10 +51,14 @@ export async function GET(request: NextRequest) {
         );
       }
       
-      sellerId = testSeller.id;
+      currentUserId = testSeller.id;
     } else {
-      sellerId = session?.user?.id;
+      currentUserId = session?.user?.id;
     }
+
+    // Get actual seller ID (Super Seller ID for User Sellers)
+    // Həqiqi seller ID-ni al (User Seller-lər üçün Super Seller ID)
+    const { actualSellerId } = await getActualSellerId(currentUserId);
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
@@ -63,8 +69,10 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status") || "";
 
     // Build where clause / Where şərtini qur
+    // Use actualSellerId so User Sellers can see Super Seller's products
+    // actualSellerId istifadə et ki User Seller-lər Super Seller-in məhsullarını görə bilsinlər
     const whereClause: any = {
-      sellerId: sellerId,
+      sellerId: actualSellerId,
     };
 
     // Add search filter if provided / Axtarış filtrini əlavə et
@@ -87,33 +95,69 @@ export async function GET(request: NextRequest) {
       whereClause.isActive = false;
     }
 
-    // Get products with pagination / Məhsulları pagination ilə al
-    const products = await db.product.findMany({
-      where: whereClause,
-      skip,
-      take: limit,
-      include: {
-        category: {
-          select: {
-            id: true,
-            name: true,
+    // Get products with pagination and error handling
+    // Xəta idarəetməsi ilə məhsulları pagination ilə al
+    let products, totalCount;
+    try {
+      [products, totalCount] = await Promise.all([
+        db.product.findMany({
+          where: whereClause,
+          skip,
+          take: limit,
+          include: {
+            category: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            _count: {
+              select: {
+                orderItems: true,
+              },
+            },
           },
-        },
-        _count: {
-          select: {
-            orderItems: true,
+          orderBy: {
+            createdAt: "desc",
           },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    // Get total count for pagination / Pagination üçün ümumi sayı al
-    const totalCount = await db.product.count({
-      where: whereClause,
-    });
+        }),
+        // Get total count for pagination / Pagination üçün ümumi sayı al
+        db.product.count({
+          where: whereClause,
+        }),
+      ]);
+    } catch (error: any) {
+      const errorResponse = await handleDatabaseError(error, 'GET products');
+      if (errorResponse) return errorResponse;
+      
+      // Retry after reconnect / Yenidən bağlandıqdan sonra yenidən cəhd et
+      [products, totalCount] = await Promise.all([
+        db.product.findMany({
+          where: whereClause,
+          skip,
+          take: limit,
+          include: {
+            category: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            _count: {
+              select: {
+                orderItems: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        }),
+        db.product.count({
+          where: whereClause,
+        }),
+      ]);
+    }
 
     return NextResponse.json({
       products,
@@ -124,10 +168,13 @@ export async function GET(request: NextRequest) {
         pages: Math.ceil(totalCount / limit),
       },
     });
-  } catch (error) {
-    console.error("Error fetching seller products:", error);
+  } catch (error: any) {
+    console.error("Error fetching seller products / Satıcı məhsullarını əldə etmə xətası:", error);
     return NextResponse.json(
-      { error: "Internal server error / Daxili server xətası" },
+      { 
+        error: "Internal server error / Daxili server xətası",
+        details: process.env.NODE_ENV === 'development' ? error?.message : undefined
+      },
       { status: 500 }
     );
   }
@@ -140,7 +187,7 @@ export async function POST(request: NextRequest) {
     
     // Check if user is authenticated and is a seller
     // İstifadəçinin giriş edib-edmədiyini və satıcı olub-olmadığını yoxla
-    let sellerId: string;
+    let currentUserId: string;
     
     if (!session || session.user?.role !== "SELLER") {
       // For testing purposes, use a test seller ID
@@ -156,18 +203,31 @@ export async function POST(request: NextRequest) {
         );
       }
       
-      sellerId = testSeller.id;
+      currentUserId = testSeller.id;
     } else {
-      sellerId = session?.user?.id;
+      currentUserId = session?.user?.id;
     }
+
+    // Get actual seller ID (Super Seller ID for User Sellers)
+    // Həqiqi seller ID-ni al (User Seller-lər üçün Super Seller ID)
+    const { actualSellerId } = await getActualSellerId(currentUserId);
 
     const body = await request.json();
     const validatedData = productCreateSchema.parse(body);
 
     // Check if category exists / Kateqoriyanın mövcud olub-olmadığını yoxla
-    const category = await db.category.findUnique({
-      where: { id: validatedData.categoryId },
-    });
+    let category;
+    try {
+      category = await db.category.findUnique({
+        where: { id: validatedData.categoryId },
+      });
+    } catch (error: any) {
+      const errorResponse = await handleDatabaseError(error, 'POST products - check category');
+      if (errorResponse) return errorResponse;
+      category = await db.category.findUnique({
+        where: { id: validatedData.categoryId },
+      });
+    }
 
     if (!category) {
       return NextResponse.json(
@@ -177,30 +237,67 @@ export async function POST(request: NextRequest) {
     }
 
     // Create product / Məhsul yarat
-    const product = await db.product.create({
-      data: {
-        ...validatedData,
-        sellerId: sellerId,
-        images: JSON.stringify(validatedData.images || []),
-      },
-      include: {
-        category: {
-          select: {
-            id: true,
-            name: true,
+    // Use actualSellerId so User Sellers create products for Super Seller
+    // actualSellerId istifadə et ki User Seller-lər Super Seller üçün məhsul yaratsınlar
+    let product;
+    try {
+      product = await db.product.create({
+        data: {
+          ...validatedData,
+          sellerId: actualSellerId,
+          images: JSON.stringify(validatedData.images || []),
+          isPublished: false, // Default to false, requires admin approval
+          isApproved: false   // Default to false, requires admin approval
+        },
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-      },
-    });
+      });
+    } catch (error: any) {
+      const errorResponse = await handleDatabaseError(error, 'POST products - create product');
+      if (errorResponse) return errorResponse;
+      product = await db.product.create({
+        data: {
+          ...validatedData,
+          sellerId: actualSellerId,
+          images: JSON.stringify(validatedData.images || []),
+          isPublished: false,
+          isApproved: false
+        },
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+    }
 
     return NextResponse.json(product, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      console.error("Validation error / Yoxlama xətası:", error.errors);
+      return NextResponse.json(
+        { 
+          error: "Validation error / Yoxlama xətası",
+          details: error.errors 
+        },
+        { status: 400 }
+      );
     }
-    console.error("Error creating product:", error);
+    console.error("Error creating product / Məhsul yaratma xətası:", error);
     return NextResponse.json(
-      { error: "Internal server error / Daxili server xətası" },
+      { 
+        error: "Internal server error / Daxili server xətası",
+        details: process.env.NODE_ENV === 'development' ? error?.message : undefined
+      },
       { status: 500 }
     );
   }

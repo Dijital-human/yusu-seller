@@ -101,6 +101,8 @@ export default function SellerSettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState<string>("");
+  const [success, setSuccess] = useState<string>("");
 
   // Check if user is seller / İstifadəçinin satıcı olub-olmadığını yoxla
   useEffect(() => {
@@ -122,26 +124,42 @@ export default function SellerSettingsPage() {
   const loadSettingsData = async () => {
     try {
       setIsLoading(true);
+      setError("");
       
-      // For testing purposes, use mock data
-      // Test məqsədləri üçün mock məlumat istifadə et
-      const mockProfile: UserProfile = {
-        id: "1",
-        name: "John Doe",
-        email: "john.doe@example.com",
-        phone: "+994 12 345 67 89",
-        company: "Tech Solutions LLC",
-        address: "123 Business Street",
-        city: "Baku",
-        country: "Azerbaijan",
-        website: "https://techsolutions.az",
-        description: "Leading technology solutions provider in Azerbaijan",
-        avatar: "",
-      };
+      // Load profile data / Profil məlumatlarını yüklə
+      const profileResponse = await fetch("/api/seller/settings/profile");
+      if (profileResponse.ok) {
+        const profileData = await profileResponse.json();
+        setProfile({
+          id: profileData.profile.id,
+          name: profileData.profile.name || "",
+          email: profileData.profile.email || "",
+          phone: profileData.profile.phone || "",
+          company: profileData.profile.company || "",
+          address: "",
+          city: "",
+          country: "",
+          website: profileData.profile.website || "",
+          description: profileData.profile.description || "",
+          avatar: profileData.profile.avatar || "",
+        });
+      } else {
+        const errorData = await profileResponse.json();
+        setError(errorData.error || "Failed to load profile / Profil yüklənmədi");
+      }
 
-      setProfile(mockProfile);
+      // Load notification settings / Bildiriş tənzimləmələrini yüklə
+      const notificationsResponse = await fetch("/api/seller/settings/notifications");
+      if (notificationsResponse.ok) {
+        const notificationsData = await notificationsResponse.json();
+        setNotifications(notificationsData.notifications);
+      } else {
+        // Use default notifications if API fails / API uğursuz olarsa default bildirişləri istifadə et
+        console.warn("Failed to load notification settings / Bildiriş tənzimləmələri yüklənmədi");
+      }
     } catch (error) {
-      console.error("Error loading settings:", error);
+      console.error("Error loading settings / Tənzimləmələri yükləmə xətası:", error);
+      setError("Failed to load settings / Tənzimləmələr yüklənmədi");
     } finally {
       setIsLoading(false);
     }
@@ -150,13 +168,39 @@ export default function SellerSettingsPage() {
   const handleSaveProfile = async () => {
     try {
       setIsSaving(true);
-      // Here you would typically save to API
-      // Burada adətən API-yə saxlamaq olardı
-      console.log("Saving profile:", profile);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      setError("");
+      setSuccess("");
+      
+      const response = await fetch("/api/seller/settings/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: profile.name,
+          email: profile.email,
+          phone: profile.phone,
+          company: profile.company,
+          website: profile.website,
+          description: profile.description,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to save profile / Profil saxlanılmadı");
+        return;
+      }
+
+      const data = await response.json();
+      setProfile({
+        ...profile,
+        ...data.profile,
+      });
+      setSuccess("Profile updated successfully / Profil uğurla yeniləndi");
     } catch (error) {
-      console.error("Error saving profile:", error);
+      console.error("Error saving profile / Profil saxlaması xətası:", error);
+      setError("Failed to save profile / Profil saxlanılmadı");
     } finally {
       setIsSaving(false);
     }
@@ -165,10 +209,29 @@ export default function SellerSettingsPage() {
   const handleSaveNotifications = async () => {
     try {
       setIsSaving(true);
-      console.log("Saving notifications:", notifications);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      setError("");
+      setSuccess("");
+      
+      const response = await fetch("/api/seller/settings/notifications", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(notifications),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to save notifications / Bildirişlər saxlanılmadı");
+        return;
+      }
+
+      const data = await response.json();
+      setNotifications(data.notifications);
+      setSuccess("Notification settings updated successfully / Bildiriş tənzimləmələri uğurla yeniləndi");
     } catch (error) {
-      console.error("Error saving notifications:", error);
+      console.error("Error saving notifications / Bildirişləri saxlaması xətası:", error);
+      setError("Failed to save notifications / Bildirişlər saxlanılmadı");
     } finally {
       setIsSaving(false);
     }
@@ -177,10 +240,63 @@ export default function SellerSettingsPage() {
   const handleSaveSecurity = async () => {
     try {
       setIsSaving(true);
+      setError("");
+      setSuccess("");
+      
+      // Note: Security settings API will be implemented in future
+      // Qeyd: Təhlükəsizlik tənzimləmələri API-si gələcəkdə tətbiq ediləcək
       console.log("Saving security:", security);
       await new Promise(resolve => setTimeout(resolve, 1000));
+      setSuccess("Security settings saved / Təhlükəsizlik tənzimləmələri saxlanıldı");
     } catch (error) {
-      console.error("Error saving security:", error);
+      console.error("Error saving security / Təhlükəsizliyi saxlaması xətası:", error);
+      setError("Failed to save security settings / Təhlükəsizlik tənzimləmələri saxlanılmadı");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    try {
+      setIsSaving(true);
+      setError("");
+      setSuccess("");
+
+      if (newPassword !== confirmPassword) {
+        setError("Passwords don't match / Şifrələr uyğun gəlmir");
+        return;
+      }
+
+      if (newPassword.length < 8) {
+        setError("Password must be at least 8 characters / Şifrə ən azı 8 simvol olmalıdır");
+        return;
+      }
+
+      const response = await fetch("/api/seller/settings/password", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+          confirmPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to change password / Şifrə dəyişdirilmədi");
+        return;
+      }
+
+      setSuccess("Password changed successfully / Şifrə uğurla dəyişdirildi");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      console.error("Error changing password / Şifrəni dəyişdirmə xətası:", error);
+      setError("Failed to change password / Şifrə dəyişdirilmədi");
     } finally {
       setIsSaving(false);
     }
@@ -224,6 +340,20 @@ export default function SellerSettingsPage() {
             / Hesab tənzimləmələrinizi, bildirişləri və təhlükəsizlik seçimlərini idarə edin.
           </p>
         </div>
+
+        {/* Error and Success Messages / Xəta və Uğur Mesajları */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center">
+            <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+            <p className="text-red-800">{error}</p>
+          </div>
+        )}
+        {success && (
+          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+            <p className="text-green-800">{success}</p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Profile Settings */}
@@ -493,21 +623,12 @@ export default function SellerSettingsPage() {
               />
             </div>
             <Button 
-              onClick={() => {
-                if (newPassword === confirmPassword && newPassword.length >= 8) {
-                  console.log("Password changed successfully");
-                  setCurrentPassword("");
-                  setNewPassword("");
-                  setConfirmPassword("");
-                } else {
-                  console.log("Password requirements not met");
-                }
-              }}
-              disabled={!currentPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword}
+              onClick={handleChangePassword}
+              disabled={!currentPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword || isSaving}
               className="w-full"
             >
               <Save className="h-4 w-4 mr-2" />
-              Change Password
+              {isSaving ? "Changing..." : "Change Password / Şifrəni Dəyişdir"}
             </Button>
           </CardContent>
         </Card>

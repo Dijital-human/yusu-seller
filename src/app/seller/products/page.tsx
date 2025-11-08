@@ -42,6 +42,7 @@ import {
   Download,
   Upload
 } from "lucide-react";
+import { BulkUpload } from "@/components/products/BulkUpload";
 
 interface Product {
   id: string;
@@ -75,6 +76,7 @@ export default function SellerProductsPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -220,10 +222,22 @@ export default function SellerProductsPage() {
                 / Məhsul inventarınızı idarə edin və performansı izləyin.
               </p>
             </div>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Product / Məhsul Əlavə Et
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowBulkUpload(true)}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Bulk Upload
+              </Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={() => router.push("/seller/products/new")}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Product / Məhsul Əlavə Et
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -274,6 +288,18 @@ export default function SellerProductsPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Bulk Upload Modal */}
+        {showBulkUpload && (
+          <div className="mb-6">
+            <BulkUpload />
+            <div className="mt-4 flex justify-end">
+              <Button variant="outline" onClick={() => setShowBulkUpload(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Products Grid/List */}
         {error && (

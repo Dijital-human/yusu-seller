@@ -123,7 +123,7 @@ export default function OrderDetailsPage() {
     switch (status) {
       case OrderStatus.PENDING:
         return "bg-orange-100 text-orange-800";
-      case OrderStatus.PROCESSING:
+      case OrderStatus.PREPARING:
         return "bg-blue-100 text-blue-800";
       case OrderStatus.SHIPPED:
         return "bg-indigo-100 text-indigo-800";
@@ -140,7 +140,7 @@ export default function OrderDetailsPage() {
     switch (status) {
       case OrderStatus.PENDING:
         return "Pending / Gözləyir";
-      case OrderStatus.PROCESSING:
+      case OrderStatus.PREPARING:
         return "Processing / İşlənir";
       case OrderStatus.SHIPPED:
         return "Shipped / Göndərilib";
@@ -157,7 +157,7 @@ export default function OrderDetailsPage() {
     switch (status) {
       case OrderStatus.PENDING:
         return <Clock className="h-4 w-4" />;
-      case OrderStatus.PROCESSING:
+      case OrderStatus.PREPARING:
         return <Package className="h-4 w-4" />;
       case OrderStatus.SHIPPED:
         return <Truck className="h-4 w-4" />;

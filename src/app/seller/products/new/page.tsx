@@ -30,14 +30,14 @@ import {
   FileVideo
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
+import { MOCK_CATEGORIES } from "@/lib/constants/categories";
 
-// Product creation schema / Məhsul yaratma sxemi
 const productSchema = z.object({
-  name: z.string().min(1, "Product name is required / Məhsul adı tələb olunur"),
-  description: z.string().min(10, "Description must be at least 10 characters / Təsvir ən azı 10 simvol olmalıdır"),
-  price: z.number().positive("Price must be positive / Qiymət müsbət olmalıdır"),
-  stock: z.number().int().min(0, "Stock cannot be negative / Stok mənfi ola bilməz"),
-  categoryId: z.string().min(1, "Category is required / Kateqoriya tələb olunur"),
+  name: z.string().min(1, "Product name is required"),
+  description: z.string().min(10, "Description must be at least 10 characters"),
+  price: z.number().positive("Price must be positive"),
+  stock: z.number().int().min(0, "Stock cannot be negative"),
+  categoryId: z.string().min(1, "Category is required"),
   weight: z.number().optional(),
   dimensions: z.string().optional(),
   brand: z.string().optional(),
@@ -68,6 +68,7 @@ export default function NewProductPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -82,105 +83,171 @@ export default function NewProductPage() {
     resolver: zodResolver(productSchema),
   });
 
-  // Check if user is seller / İstifadəçinin satıcı olub-olmadığını yoxla
   useEffect(() => {
-    if (status === "loading") return;
+    setIsMounted(true);
     
-    // For testing purposes, skip authentication check
-    // Test məqsədləri üçün autentifikasiya yoxlamasını keç
-    // if (!session || session.user?.role !== "SELLER") {
-    //   router.push("/auth/signin");
-    //   return;
-    // }
-  }, [session, status, router]);
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error("Unhandled promise rejection:", event.reason);
+      const errorMessage = event.reason instanceof Error 
+        ? event.reason.message 
+        : event.reason instanceof Event
+          ? "An unexpected error occurred"
+          : String(event.reason);
+      setError(errorMessage);
+      event.preventDefault();
+    };
 
-  // Load categories / Kateqoriyaları yüklə
-  useEffect(() => {
-    loadCategories();
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
   }, []);
+
+  useEffect(() => {
+    if (isMounted) {
+      loadCategories().catch((error) => {
+        console.error("Error in loadCategories:", error);
+      });
+    }
+  }, [isMounted]);
+
+  useEffect(() => {
+    return () => {
+      mediaFiles.forEach(file => {
+        if (file.url && file.url.startsWith('blob:')) {
+          URL.revokeObjectURL(file.url);
+        }
+      });
+    };
+  }, [mediaFiles]);
 
   const loadCategories = async () => {
     try {
-      // For testing purposes, use mock data
-      // Test məqsədləri üçün mock məlumat istifadə et
-      const mockCategories: Category[] = [
-        { id: "1", name: "Electronics / Elektronika" },
-        { id: "2", name: "Fashion / Moda" },
-        { id: "3", name: "Home & Garden / Ev və Bağ" },
-        { id: "4", name: "Sports / İdman" },
-        { id: "5", name: "Books / Kitablar" },
-        { id: "6", name: "Beauty / Gözəllik" },
-        { id: "7", name: "Toys / Oyuncaqlar" },
-        { id: "8", name: "Automotive / Avtomobil" },
-      ];
-      setCategories(mockCategories);
+      const response = await fetch("/api/categories");
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          setCategories(result.data);
+          return;
+        }
+      }
+      setCategories(MOCK_CATEGORIES);
     } catch (error) {
       console.error("Error loading categories:", error);
+      setCategories(MOCK_CATEGORIES);
     }
   };
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files) return;
+    try {
+      const files = event.target.files;
+      if (!files) return;
 
-    Array.from(files).forEach((file) => {
-      if (file.type.startsWith('image/')) {
-        const id = Math.random().toString(36).substr(2, 9);
-        const url = URL.createObjectURL(file);
-        
-        const newMediaFile: MediaFile = {
-          id,
-          file,
-          type: 'image',
-          url,
-          isMain: mediaFiles.length === 0, // First image is main by default
-        };
-        
-        setMediaFiles(prev => [...prev, newMediaFile]);
+      Array.from(files).forEach((file) => {
+        try {
+          if (file.type.startsWith('image/')) {
+            const id = Math.random().toString(36).substr(2, 9);
+            const url = URL.createObjectURL(file);
+            
+            setMediaFiles(prev => {
+              const isFirstImage = prev.filter(f => f.type === 'image').length === 0;
+              const newMediaFile: MediaFile = {
+                id,
+                file,
+                type: 'image',
+                url,
+                isMain: isFirstImage,
+              };
+              return [...prev, newMediaFile];
+            });
+          }
+        } catch (fileError) {
+          console.error("Error processing image file:", fileError);
+          setError(`Failed to process image: ${file.name}`);
+        }
+      });
+    } catch (error) {
+      console.error("Error in handleImageUpload:", error);
+      setError("Failed to upload images. Please try again.");
+    } finally {
+      if (event.target) {
+        event.target.value = '';
       }
-    });
+    }
   };
 
   const handleVideoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files) return;
+    try {
+      const files = event.target.files;
+      if (!files) return;
 
-    Array.from(files).forEach((file) => {
-      if (file.type.startsWith('video/')) {
-        const id = Math.random().toString(36).substr(2, 9);
-        const url = URL.createObjectURL(file);
-        
-        const newMediaFile: MediaFile = {
-          id,
-          file,
-          type: 'video',
-          url,
-          isMain: false,
-        };
-        
-        setMediaFiles(prev => [...prev, newMediaFile]);
+      Array.from(files).forEach((file) => {
+        try {
+          if (file.type.startsWith('video/')) {
+            const id = Math.random().toString(36).substr(2, 9);
+            const url = URL.createObjectURL(file);
+            
+            const newMediaFile: MediaFile = {
+              id,
+              file,
+              type: 'video',
+              url,
+              isMain: false,
+            };
+            
+            setMediaFiles(prev => [...prev, newMediaFile]);
+          }
+        } catch (fileError) {
+          console.error("Error processing video file:", fileError);
+          setError(`Failed to process video: ${file.name}`);
+        }
+      });
+    } catch (error) {
+      console.error("Error in handleVideoUpload:", error);
+      setError("Failed to upload videos. Please try again.");
+    } finally {
+      if (event.target) {
+        event.target.value = '';
       }
-    });
+    }
   };
 
   const removeMediaFile = (id: string) => {
-    setMediaFiles(prev => {
-      const updated = prev.filter(file => file.id !== id);
-      // If we removed the main image, make the first remaining image main
-      if (updated.length > 0 && !updated.some(file => file.isMain)) {
-        updated[0].isMain = true;
-      }
-      return updated;
-    });
+    try {
+      setMediaFiles(prev => {
+        const fileToRemove = prev.find(f => f.id === id);
+        if (fileToRemove?.url && fileToRemove.url.startsWith('blob:')) {
+          URL.revokeObjectURL(fileToRemove.url);
+        }
+        
+        const updated = prev.filter(file => file.id !== id);
+        if (updated.length > 0 && !updated.some(file => file.isMain && file.type === 'image')) {
+          const firstImage = updated.find(file => file.type === 'image');
+          if (firstImage) {
+            firstImage.isMain = true;
+          }
+        }
+        return updated;
+      });
+    } catch (error) {
+      console.error("Error removing media file:", error);
+      setError("Failed to remove media file");
+    }
   };
 
   const setMainImage = (id: string) => {
-    setMediaFiles(prev => 
-      prev.map(file => ({
-        ...file,
-        isMain: file.id === id && file.type === 'image'
-      }))
-    );
+    try {
+      setMediaFiles(prev => 
+        prev.map(file => ({
+          ...file,
+          isMain: file.id === id && file.type === 'image'
+        }))
+      );
+    } catch (error) {
+      console.error("Error setting main image:", error);
+      setError("Failed to set main image");
+    }
   };
 
   const onSubmit = async (data: ProductFormData) => {
@@ -189,54 +256,88 @@ export default function NewProductPage() {
       setError(null);
       setSuccess(null);
 
-      // Check if at least one image is uploaded
       const hasImages = mediaFiles.some(file => file.type === 'image');
       if (!hasImages) {
-        setError("At least one image is required / Ən azı bir şəkil tələb olunur");
+        setError("At least one image is required");
+        setIsLoading(false);
         return;
       }
 
-      // Prepare form data
-      const formData = new FormData();
-      formData.append('name', data.name);
-      formData.append('description', data.description);
-      formData.append('price', data.price.toString());
-      formData.append('stock', data.stock.toString());
-      formData.append('categoryId', data.categoryId);
-      
-      if (data.weight) formData.append('weight', data.weight.toString());
-      if (data.dimensions) formData.append('dimensions', data.dimensions);
-      if (data.brand) formData.append('brand', data.brand);
-      if (data.sku) formData.append('sku', data.sku);
-
-      // Add media files
-      mediaFiles.forEach((mediaFile, index) => {
-        formData.append(`media_${index}`, mediaFile.file);
-        formData.append(`media_type_${index}`, mediaFile.type);
-        formData.append(`media_isMain_${index}`, mediaFile.isMain.toString());
-      });
-
-      // Simulate API call
-      console.log("Creating product with data:", data);
-      console.log("Media files:", mediaFiles);
-      
-      // Simulate upload progress
       setIsUploading(true);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const uploadedImages: string[] = [];
+      
+      try {
+        for (const mediaFile of mediaFiles) {
+          if (mediaFile.type === 'image' && mediaFile.file) {
+            const uploadFormData = new FormData();
+            uploadFormData.append('file', mediaFile.file);
+            uploadFormData.append('type', 'image');
+
+            const uploadResponse = await fetch('/api/upload', {
+              method: 'POST',
+              body: uploadFormData,
+            });
+
+            if (!uploadResponse.ok) {
+              const errorData = await uploadResponse.json().catch(() => ({}));
+              throw new Error(errorData.error || 'Failed to upload image');
+            }
+
+            const uploadData = await uploadResponse.json().catch(() => ({}));
+            if (uploadData.fileUrl || uploadData.url) {
+              uploadedImages.push(uploadData.fileUrl || uploadData.url);
+            }
+          }
+        }
+      } catch (uploadError: any) {
+        console.error("Error uploading images:", uploadError);
+        setError(uploadError.message || "Failed to upload images. Please try again.");
+        setIsLoading(false);
+        setIsUploading(false);
+        return;
+      }
+
       setIsUploading(false);
 
-      setSuccess("Product created successfully! / Məhsul uğurla yaradıldı!");
+      const productData = {
+        name: data.name,
+        description: data.description,
+        price: data.price,
+        stock: data.stock,
+        categoryId: data.categoryId,
+        images: uploadedImages,
+        isActive: true,
+      };
+
+      const response = await fetch('/api/seller/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(productData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || errorData.message || 'Failed to create product';
+        const errorDetails = errorData.details ? ` Details: ${JSON.stringify(errorData.details)}` : '';
+        throw new Error(`${errorMessage}${errorDetails}`);
+      }
+
+      const result = await response.json().catch(() => ({}));
+      setSuccess("Product created successfully!");
       
-      // Redirect to products page after 2 seconds
       setTimeout(() => {
         router.push("/seller/products");
       }, 2000);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating product:", error);
-      setError("Failed to create product. Please try again. / Məhsul yaratmaq uğursuz oldu. Yenidən cəhd edin.");
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setError(errorMessage || "Failed to create product. Please try again.");
     } finally {
       setIsLoading(false);
+      setIsUploading(false);
     }
   };
 
@@ -281,7 +382,18 @@ export default function NewProductPage() {
           </Alert>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          handleSubmit(onSubmit)(e).catch((error) => {
+            console.error("Form submission error:", error);
+            const errorMessage = error instanceof Error 
+              ? error.message 
+              : error instanceof Event 
+                ? "An unexpected error occurred"
+                : String(error);
+            setError(errorMessage);
+          });
+        }} className="space-y-8">
           {/* Basic Information */}
           <Card>
             <CardHeader>
@@ -307,18 +419,40 @@ export default function NewProductPage() {
 
                 <div>
                   <Label htmlFor="categoryId">Category / Kateqoriya *</Label>
-                  <Select onValueChange={(value) => setValue("categoryId", value)}>
-                    <SelectTrigger className={errors.categoryId ? "border-red-500" : ""}>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {!isMounted ? (
+                    <Input
+                      id="categoryId"
+                      placeholder="Loading categories..."
+                      disabled
+                    />
+                  ) : (
+                    <Select 
+                      value={watch("categoryId") || undefined}
+                      onValueChange={(value) => {
+                        setValue("categoryId", value, { shouldValidate: true });
+                      }}
+                    >
+                      <SelectTrigger 
+                        id="categoryId"
+                        className={errors.categoryId ? "border-red-500" : ""}
+                      >
+                        <SelectValue placeholder="Select category / Kateqoriya seçin" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.length === 0 ? (
+                          <SelectItem value="loading" disabled>
+                            Loading categories...
+                          </SelectItem>
+                        ) : (
+                          categories.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
                   {errors.categoryId && (
                     <p className="text-red-500 text-sm mt-1">{errors.categoryId.message}</p>
                   )}

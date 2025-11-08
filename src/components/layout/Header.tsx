@@ -9,6 +9,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
+import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/Button";
 import { 
   ShoppingCart, 
@@ -27,7 +28,7 @@ export function Header() {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const { user, isAuthenticated, handleSignOut } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   
   // Simple access control function
   const canAccess = (path: string) => {
@@ -59,7 +60,7 @@ export function Header() {
   };
 
   const handleSignOutClick = () => {
-    handleSignOut();
+    signOut({ callbackUrl: "/" });
     setIsMobileMenuOpen(false);
     setIsUserMenuOpen(false);
   };

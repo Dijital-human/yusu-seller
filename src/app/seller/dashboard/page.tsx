@@ -38,6 +38,7 @@ import {
   PauseCircle,
   PlayCircle
 } from "lucide-react";
+import { LowStockAlerts } from "@/components/alerts/LowStockAlerts";
 
 interface Product {
   id: string;
@@ -208,14 +209,14 @@ export default function SellerDashboard() {
       if (response.ok) {
         // Reload orders
         loadSellerData();
-        alert("Order is now being prepared / Sifariş hazırlanır");
+        alert("Order is now being prepared");
       } else {
         const error = await response.json();
         alert(error.error || "Error preparing order");
       }
     } catch (error) {
       console.error("Error preparing order:", error);
-      alert("Error preparing order / Sifariş hazırlama xətası");
+      alert("Error preparing order");
     }
   };
 
@@ -232,14 +233,14 @@ export default function SellerDashboard() {
       if (response.ok) {
         // Reload orders
         loadSellerData();
-        alert("Order handed to courier / Sifariş kuryer-ə verildi");
+        alert("Order handed to courier");
       } else {
         const error = await response.json();
         alert(error.error || "Error handing to courier");
       }
     } catch (error) {
       console.error("Error handing to courier:", error);
-      alert("Error handing to courier / Kuryer-ə vermə xətası");
+      alert("Error handing to courier");
     }
   };
 
@@ -256,14 +257,14 @@ export default function SellerDashboard() {
       if (response.ok) {
         // Reload products
         loadSellerData();
-        alert("Product submitted for approval / Məhsul təsdiq üçün təqdim edildi");
+        alert("Product submitted for approval");
       } else {
         const error = await response.json();
         alert(error.error || "Error publishing product");
       }
     } catch (error) {
       console.error("Error publishing product:", error);
-      alert("Error publishing product / Məhsul yayımlama xətası");
+      alert("Error publishing product");
     }
   };
 
@@ -279,14 +280,14 @@ export default function SellerDashboard() {
       if (response.ok) {
         // Reload products
         loadSellerData();
-        alert("Product unpublished / Məhsul yayımdan çıxarıldı");
+        alert("Product unpublished");
       } else {
         const error = await response.json();
         alert(error.error || "Error unpublishing product");
       }
     } catch (error) {
       console.error("Error unpublishing product:", error);
-      alert("Error unpublishing product / Məhsul yayımdan çıxarma xətası");
+      alert("Error unpublishing product");
     }
   };
 
@@ -382,11 +383,10 @@ export default function SellerDashboard() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent mb-3">
-                Seller Dashboard / Satıcı İdarə Paneli
+                Seller Dashboard
               </h1>
               <p className="text-lg text-gray-700 max-w-2xl leading-relaxed">
                 Manage your products, orders, and business performance with advanced analytics and insights.
-                / Məhsullarınızı, sifarişlərinizi və biznes performansınızı ətraflı analitika və məlumatlarla idarə edin.
               </p>
             </div>
             <div className="flex items-center space-x-3">
@@ -419,7 +419,7 @@ export default function SellerDashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-emerald-100 text-sm font-medium mb-1">Total Products / Ümumi Məhsullar</p>
+                  <p className="text-emerald-100 text-sm font-medium mb-1">Total Products</p>
                   <p className="text-3xl font-bold mb-2">{stats.totalProducts}</p>
                   <div className="flex items-center">
                     <ArrowUpRight className="h-4 w-4 text-green-300 mr-1" />
@@ -441,7 +441,7 @@ export default function SellerDashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-amber-100 text-sm font-medium mb-1">Pending Orders / Gözləyən Sifarişlər</p>
+                  <p className="text-amber-100 text-sm font-medium mb-1">Pending Orders</p>
                   <p className="text-3xl font-bold mb-2">{stats.pendingOrders}</p>
                   <div className="flex items-center">
                     <AlertTriangle className="h-4 w-4 text-yellow-300 mr-1" />
@@ -485,7 +485,7 @@ export default function SellerDashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-emerald-100 text-sm font-medium mb-1">Total Revenue / Ümumi Gəlir</p>
+                  <p className="text-emerald-100 text-sm font-medium mb-1">Total Revenue</p>
                   <p className="text-3xl font-bold mb-2">{formatCurrency(stats.totalRevenue)}</p>
                   <div className="flex items-center">
                     <ArrowUpRight className="h-4 w-4 text-green-300 mr-1" />
@@ -510,7 +510,7 @@ export default function SellerDashboard() {
               <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sky-100 text-sm font-medium mb-1">Shipped / Göndərilmiş</p>
+                  <p className="text-sky-100 text-sm font-medium mb-1">Shipped</p>
                   <p className="text-3xl font-bold mb-2">{stats.shippedOrders}</p>
                 <div className="flex items-center">
                     <CheckCircle2 className="h-4 w-4 text-green-300 mr-1" />
@@ -532,7 +532,7 @@ export default function SellerDashboard() {
               <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-lime-100 text-sm font-medium mb-1">Completed / Tamamlanmış</p>
+                  <p className="text-lime-100 text-sm font-medium mb-1">Completed</p>
                   <p className="text-3xl font-bold mb-2">{stats.completedOrders}</p>
                 <div className="flex items-center">
                     <Star className="h-4 w-4 text-yellow-300 mr-1" />
@@ -554,7 +554,7 @@ export default function SellerDashboard() {
               <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-rose-100 text-sm font-medium mb-1">Pending Approval / Təsdiq Gözləyir</p>
+                  <p className="text-rose-100 text-sm font-medium mb-1">Pending Approval</p>
                   <p className="text-3xl font-bold mb-2">{stats.pendingApproval}</p>
                 <div className="flex items-center">
                     <AlertTriangle className="h-4 w-4 text-yellow-300 mr-1" />
@@ -576,7 +576,7 @@ export default function SellerDashboard() {
               <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-100 text-sm font-medium mb-1">Total Orders / Ümumi Sifarişlər</p>
+                  <p className="text-slate-100 text-sm font-medium mb-1">Total Orders</p>
                   <p className="text-3xl font-bold mb-2">{stats.totalOrders}</p>
                 <div className="flex items-center">
                     <ArrowUpRight className="h-4 w-4 text-green-300 mr-1" />
@@ -593,35 +593,35 @@ export default function SellerDashboard() {
 
         {/* Quick Actions */}
           <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions / Sürətli Əməliyyatlar</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Button 
               onClick={() => router.push('/seller/products/new')}
               className="h-20 flex flex-col items-center justify-center space-y-2 bg-white hover:bg-gray-50 border-2 border-dashed border-gray-300 hover:border-blue-400"
             >
               <Plus className="h-6 w-6 text-gray-600" />
-              <span className="text-sm font-medium text-gray-700">Add Product / Məhsul Əlavə Et</span>
+              <span className="text-sm font-medium text-gray-700">Add Product</span>
             </Button>
             <Button 
               onClick={() => router.push('/seller/orders')}
               className="h-20 flex flex-col items-center justify-center space-y-2 bg-white hover:bg-gray-50 border-2 border-dashed border-gray-300 hover:border-green-400"
             >
               <ShoppingCart className="h-6 w-6 text-gray-600" />
-              <span className="text-sm font-medium text-gray-700">Manage Orders / Sifarişləri İdarə Et</span>
+              <span className="text-sm font-medium text-gray-700">Manage Orders</span>
             </Button>
               <Button
               onClick={() => router.push('/seller/products')}
               className="h-20 flex flex-col items-center justify-center space-y-2 bg-white hover:bg-gray-50 border-2 border-dashed border-gray-300 hover:border-purple-400"
               >
               <Package className="h-6 w-6 text-gray-600" />
-              <span className="text-sm font-medium text-gray-700">Manage Products / Məhsulları İdarə Et</span>
+              <span className="text-sm font-medium text-gray-700">Manage Products</span>
               </Button>
               <Button
               onClick={() => router.push('/seller/analytics')}
               className="h-20 flex flex-col items-center justify-center space-y-2 bg-white hover:bg-gray-50 border-2 border-dashed border-gray-300 hover:border-orange-400"
               >
               <BarChart className="h-6 w-6 text-gray-600" />
-              <span className="text-sm font-medium text-gray-700">View Analytics / Analitikaya Bax</span>
+              <span className="text-sm font-medium text-gray-700">View Analytics</span>
               </Button>
             </div>
           </div>
@@ -631,13 +631,13 @@ export default function SellerDashboard() {
           {/* Recent Orders */}
             <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg font-semibold">Recent Orders / Son Sifarişlər</CardTitle>
+              <CardTitle className="text-lg font-semibold">Recent Orders</CardTitle>
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => router.push('/seller/orders')}
               >
-                View All / Hamısına Bax
+                View All
               </Button>
               </CardHeader>
               <CardContent>
@@ -718,7 +718,7 @@ export default function SellerDashboard() {
               ) : (
                 <div className="text-center py-8">
                   <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No orders yet / Hələ sifariş yoxdur</p>
+                  <p className="text-gray-500">No orders yet</p>
                   </div>
                 )}
               </CardContent>
@@ -727,13 +727,13 @@ export default function SellerDashboard() {
           {/* Top Products */}
             <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg font-semibold">Top Products / Ən Çox Satılan Məhsullar</CardTitle>
+              <CardTitle className="text-lg font-semibold">Top Products</CardTitle>
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => router.push('/seller/products')}
               >
-                View All / Hamısına Bax
+                View All
               </Button>
               </CardHeader>
               <CardContent>
@@ -812,7 +812,7 @@ export default function SellerDashboard() {
               ) : (
                 <div className="text-center py-8">
                   <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No products yet / Hələ məhsul yoxdur</p>
+                  <p className="text-gray-500">No products yet</p>
                   </div>
                 )}
               </CardContent>
@@ -823,7 +823,7 @@ export default function SellerDashboard() {
         <div className="mt-8">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg font-semibold">Performance Overview / Performans Ümumi Baxış</CardTitle>
+              <CardTitle className="text-lg font-semibold">Performance Overview</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -831,37 +831,42 @@ export default function SellerDashboard() {
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Activity className="h-8 w-8 text-green-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">Store Health / Mağaza Sağlamlığı</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Store Health</h3>
                   <p className="text-3xl font-bold text-green-600">95%</p>
-                  <p className="text-sm text-gray-500">Excellent performance / Əla performans</p>
+                  <p className="text-sm text-gray-500">Excellent performance</p>
                 </div>
                 <div className="text-center">
                   <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Star className="h-8 w-8 text-blue-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">Customer Rating / Müştəri Reytinqi</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Customer Rating</h3>
                   <p className="text-3xl font-bold text-blue-600">4.8</p>
-                  <p className="text-sm text-gray-500">Based on 127 reviews / 127 rəydə əsaslanır</p>
+                  <p className="text-sm text-gray-500">Based on 127 reviews</p>
                 </div>
                 <div className="text-center">
                   <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <TrendingUp className="h-8 w-8 text-purple-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">Growth Rate / Artım Sürəti</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Growth Rate</h3>
                   <p className="text-3xl font-bold text-purple-600">+23%</p>
-                  <p className="text-sm text-gray-500">This month / Bu ay</p>
+                  <p className="text-sm text-gray-500">This month</p>
                 </div>
                 <div className="text-center">
                   <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Clock className="h-8 w-8 text-orange-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">Avg Response Time / Orta Cavab Müddəti</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Avg Response Time</h3>
                   <p className="text-3xl font-bold text-orange-600">2.3h</p>
-                  <p className="text-sm text-gray-500">Order processing / Sifariş emalı</p>
+                  <p className="text-sm text-gray-500">Order processing</p>
                 </div>
               </div>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Low Stock Alerts */}
+        <div className="mt-8">
+          <LowStockAlerts showSettings={true} />
         </div>
       </div>
     </div>

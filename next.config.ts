@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from 'next-intl/plugin';
+
+const withNextIntl = createNextIntlPlugin();
 
 const nextConfig: NextConfig = {
   // Enable experimental features / Eksperimental xüsusiyyətləri aktivləşdir
@@ -10,14 +13,16 @@ const nextConfig: NextConfig = {
   },
   
   // Seller subdomain configuration / Seller subdomain konfiqurasiyası
-  async rewrites() {
-    return [
-      {
-        source: '/seller/:path*',
-        destination: '/:path*',
-      },
-    ];
-  },
+  // Note: Rewrites removed as routes are directly under /seller path
+  // Qeyd: Route-lar birbaşa /seller yolu altında olduğu üçün rewrites silindi
+  // async rewrites() {
+  //   return [
+  //     {
+  //       source: '/seller/:path*',
+  //       destination: '/:path*',
+  //     },
+  //   ];
+  // },
   
   // Image optimization configuration / Şəkil optimizasiyası konfiqurasiyası
   images: {
@@ -72,4 +77,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

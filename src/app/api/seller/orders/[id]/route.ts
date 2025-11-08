@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
-import { prisma } from "@/lib/db";
+import { prisma, db } from "@/lib/db";
 import { OrderStatus } from "@prisma/client";
 import { z } from "zod";
+import { isValidSellerTransition, getTransitionErrorMessage } from "@/lib/order-workflow";
+import { getActualSellerId } from "@/lib/warehouse-access";
+import { handleDatabaseError } from "@/lib/db-utils";
 
 // Order status update schema / Sifariş status yeniləmə sxemi
 const orderStatusUpdateSchema = z.object({
@@ -32,9 +35,19 @@ export async function GET(
     if (!session || session.user?.role !== "SELLER") {
       // For testing purposes, use a test seller ID
       // Test məqsədləri üçün test seller ID istifadə et
-      const testSeller = await prisma.user.findFirst({
-        where: { role: "SELLER" }
-      });
+      let testSeller;
+      try {
+        testSeller = await db.user.findFirst({
+          where: { role: "SELLER" }
+        });
+      } catch (error: any) {
+        const errorResponse = await handleDatabaseError(error, 'GET test seller for order');
+        if (errorResponse) return errorResponse;
+
+        testSeller = await db.user.findFirst({
+          where: { role: "SELLER" }
+        });
+      }
       
       if (!testSeller) {
         return NextResponse.json(
@@ -48,43 +61,81 @@ export async function GET(
       sellerId = session?.user?.id;
     }
 
+    if (!sellerId) {
+      return NextResponse.json({ message: "Unauthorized / İcazə yoxdur" }, { status: 401 });
+    }
+
+    // Get actual seller ID (Super Seller ID for User Sellers)
+    // Həqiqi seller ID-ni al (User Seller-lər üçün Super Seller ID)
+    const { actualSellerId } = await getActualSellerId(sellerId);
+
     const { id: orderId } = await params;
 
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
+    let order;
+    try {
+      order = await db.order.findUnique({
+        where: { id: orderId },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
           },
-        },
-        items: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                price: true,
-                images: true,
+          items: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  price: true,
+                  images: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
+    } catch (error: any) {
+      const errorResponse = await handleDatabaseError(error, 'GET order');
+      if (errorResponse) return errorResponse;
+
+      order = await db.order.findUnique({
+        where: { id: orderId },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
+          items: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  price: true,
+                  images: true,
+                },
+              },
+            },
+          },
+        },
+      });
+    }
 
     if (!order) {
       return NextResponse.json({ message: "Order not found / Sifariş tapılmadı" }, { status: 404 });
     }
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: "Unauthorized / İcazə yoxdur" }, { status: 401 });
-    }
-
-    if (order.sellerId !== session?.user?.id) {
+    // Check if order belongs to actual seller
+    // Sifarişin həqiqi satıcıya aid olub-olmadığını yoxla
+    if (order.sellerId !== actualSellerId) {
       return NextResponse.json({ message: "Unauthorized to view this order / Bu sifarişə baxmaq üçün icazəniz yoxdur" }, { status: 403 });
     }
 
@@ -118,9 +169,12 @@ export async function GET(
     };
 
     return NextResponse.json(formattedOrder, { status: 200 });
-  } catch (error) {
-    console.error("Error fetching order:", error);
-    return NextResponse.json({ message: "Internal server error / Daxili server xətası" }, { status: 500 });
+  } catch (error: any) {
+    console.error("Error fetching order / Sifariş əldə etmə xətası:", error);
+    return NextResponse.json({ 
+      error: "Internal server error / Daxili server xətası",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    }, { status: 500 });
   }
 }
 
@@ -145,9 +199,19 @@ export async function PUT(
     if (!session || session.user?.role !== "SELLER") {
       // For testing purposes, use a test seller ID
       // Test məqsədləri üçün test seller ID istifadə et
-      const testSeller = await prisma.user.findFirst({
-        where: { role: "SELLER" }
-      });
+      let testSeller;
+      try {
+        testSeller = await db.user.findFirst({
+          where: { role: "SELLER" }
+        });
+      } catch (error: any) {
+        const errorResponse = await handleDatabaseError(error, 'GET test seller for order update');
+        if (errorResponse) return errorResponse;
+
+        testSeller = await db.user.findFirst({
+          where: { role: "SELLER" }
+        });
+      }
       
       if (!testSeller) {
         return NextResponse.json(
@@ -160,6 +224,14 @@ export async function PUT(
     } else {
       sellerId = session?.user?.id;
     }
+
+    if (!sellerId) {
+      return NextResponse.json({ error: "Unauthorized / İcazə yoxdur" }, { status: 401 });
+    }
+
+    // Get actual seller ID (Super Seller ID for User Sellers)
+    // Həqiqi seller ID-ni al (User Seller-lər üçün Super Seller ID)
+    const { actualSellerId } = await getActualSellerId(sellerId);
 
     const { id: orderId } = await params;
     const body = await req.json();
@@ -178,60 +250,151 @@ export async function PUT(
 
     // Check if order exists and belongs to the seller
     // Sifarişin mövcudluğunu və satıcıya aid olduğunu yoxla
-    const existingOrder = await prisma.order.findUnique({
-      where: { id: orderId },
-    });
+    let existingOrder;
+    try {
+      existingOrder = await db.order.findUnique({
+        where: { id: orderId },
+      });
+    } catch (error: any) {
+      const errorResponse = await handleDatabaseError(error, 'GET order for update');
+      if (errorResponse) return errorResponse;
+
+      existingOrder = await db.order.findUnique({
+        where: { id: orderId },
+      });
+    }
 
     if (!existingOrder) {
       return NextResponse.json({ error: "Order not found / Sifariş tapılmadı" }, { status: 404 });
     }
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized / İcazə yoxdur" }, { status: 401 });
-    }
-
-    if (existingOrder.sellerId !== session?.user?.id) {
+    // Check if order belongs to actual seller
+    // Sifarişin həqiqi satıcıya aid olub-olmadığını yoxla
+    if (existingOrder.sellerId !== actualSellerId) {
       return NextResponse.json({ error: "Unauthorized to update this order / Bu sifarişi yeniləmək üçün icazəniz yoxdur" }, { status: 403 });
     }
 
-    // Update order status
-    // Sifariş statusunu yenilə
-    const updatedOrder = await prisma.order.update({
-      where: { id: orderId },
-      data: {
-        status: validatedFields.data.status,
-        notes: validatedFields.data.notes,
-      },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
+    // Validate status transition / Status keçidini yoxla
+    const newStatus = validatedFields.data.status;
+    if (!isValidSellerTransition(existingOrder.status, newStatus)) {
+      return NextResponse.json(
+        { 
+          error: getTransitionErrorMessage(existingOrder.status, newStatus)
         },
-        items: {
+        { status: 400 }
+      );
+    }
+
+    // Update order with status history tracking / Status tarixçəsi ilə sifarişi yenilə
+    const updateData: any = {
+      status: newStatus,
+    };
+    
+    if (validatedFields.data.notes !== undefined) {
+      updateData.notes = validatedFields.data.notes;
+    }
+
+    // Use transaction to update order and create status history
+    // Sifarişi yeniləmək və status tarixçəsi yaratmaq üçün transaction istifadə et
+    let updatedOrder;
+    try {
+      updatedOrder = await db.$transaction(async (tx) => {
+        // Update order / Sifarişi yenilə
+        const order = await tx.order.update({
+          where: { id: orderId },
+          data: updateData,
           include: {
-            product: {
+            customer: {
               select: {
                 id: true,
                 name: true,
-                price: true,
-                images: true,
+                email: true,
+                phone: true,
+              },
+            },
+            items: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    price: true,
+                    images: true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-    });
+        });
+
+        // Create status history entry / Status tarixçəsi qeydi yarat
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: orderId,
+            status: newStatus,
+            previousStatus: existingOrder.status,
+            changedBy: sellerId,
+            notes: validatedFields.data.notes || null,
+          },
+        });
+
+        return order;
+      });
+    } catch (error: any) {
+      const errorResponse = await handleDatabaseError(error, 'PUT order');
+      if (errorResponse) return errorResponse;
+
+      updatedOrder = await db.$transaction(async (tx) => {
+        const order = await tx.order.update({
+          where: { id: orderId },
+          data: updateData,
+          include: {
+            customer: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+            items: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    price: true,
+                    images: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: orderId,
+            status: newStatus,
+            previousStatus: existingOrder.status,
+            changedBy: sellerId,
+            notes: validatedFields.data.notes || null,
+          },
+        });
+
+        return order;
+      });
+    }
 
     return NextResponse.json({
       message: "Order status updated successfully / Sifariş statusu uğurla yeniləndi",
       order: updatedOrder,
     }, { status: 200 });
-  } catch (error) {
-    console.error("Error updating order:", error);
-    return NextResponse.json({ error: "Internal server error / Daxili server xətası" }, { status: 500 });
+  } catch (error: any) {
+    console.error("Error updating order / Sifariş yeniləmə xətası:", error);
+    return NextResponse.json({ 
+      error: "Internal server error / Daxili server xətası",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    }, { status: 500 });
   }
 }

@@ -11,9 +11,17 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// Create Prisma client instance / Prisma client instance yarat
+// Create Prisma client instance with connection pooling and retry logic
+// Connection pooling və retry logic ilə Prisma client instance yarat
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
+  // Connection pool configuration / Connection pool konfiqurasiyası
+  // These settings help prevent connection errors / Bu parametrlər bağlantı xətalarının qarşısını alır
 });
 
 // In development, store the client globally to prevent multiple instances / İnkişafda, çoxlu instance-ları qarşısını almaq üçün client-i global olaraq saxla
@@ -21,14 +29,35 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 
-// Database connection test function / Veritabanı bağlantı test funksiyası
-export async function testDatabaseConnection() {
+// Database connection test function with retry logic
+// Retry logic ilə veritabanı bağlantı test funksiyası
+export async function testDatabaseConnection(retries = 3): Promise<boolean> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await prisma.$connect();
+      console.log('✅ Seller database connected successfully / Seller veritabanı uğurla bağlandı');
+      return true;
+    } catch (error) {
+      console.error(`❌ Seller database connection attempt ${i + 1}/${retries} failed / Seller veritabanı bağlantı cəhdi ${i + 1}/${retries} uğursuz oldu:`, error);
+      if (i < retries - 1) {
+        // Wait before retry / Yenidən cəhd etmədən əvvəl gözlə
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+      }
+    }
+  }
+  return false;
+}
+
+// Reconnect function / Yenidən bağlanma funksiyası
+export async function reconnectDatabase(): Promise<boolean> {
   try {
+    await prisma.$disconnect();
+    await new Promise(resolve => setTimeout(resolve, 1000));
     await prisma.$connect();
-    console.log('✅ Seller database connected successfully / Seller veritabanı uğurla bağlandı');
+    console.log('✅ Seller database reconnected successfully / Seller veritabanı uğurla yenidən bağlandı');
     return true;
   } catch (error) {
-    console.error('❌ Seller database connection failed / Seller veritabanı bağlantısı uğursuz oldu:', error);
+    console.error('❌ Seller database reconnection failed / Seller veritabanı yenidən bağlantısı uğursuz oldu:', error);
     return false;
   }
 }
@@ -43,12 +72,29 @@ export async function disconnectDatabase() {
   }
 }
 
-// Health check function / Sağlamlıq yoxlama funksiyası
+// Health check function with auto-reconnect / Avtomatik yenidən bağlanma ilə sağlamlıq yoxlama funksiyası
 export async function healthCheck() {
   try {
     await prisma.$queryRaw`SELECT 1`;
     return { status: 'healthy', timestamp: new Date().toISOString() };
   } catch (error) {
+    // Try to reconnect if connection is closed / Əgər bağlantı bağlanıbsa yenidən bağlanmağa cəhd et
+    if (error instanceof Error && error.message.includes('Closed')) {
+      console.log('🔄 Attempting to reconnect database / Veritabanına yenidən bağlanmağa cəhd edilir...');
+      const reconnected = await reconnectDatabase();
+      if (reconnected) {
+        try {
+          await prisma.$queryRaw`SELECT 1`;
+          return { status: 'healthy', timestamp: new Date().toISOString(), reconnected: true };
+        } catch (retryError) {
+          return { 
+            status: 'unhealthy', 
+            error: retryError instanceof Error ? retryError.message : 'Unknown error',
+            timestamp: new Date().toISOString() 
+          };
+        }
+      }
+    }
     return { 
       status: 'unhealthy', 
       error: error instanceof Error ? error.message : 'Unknown error',

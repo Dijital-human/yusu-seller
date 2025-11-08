@@ -2,6 +2,21 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { writeFile, mkdir } from "fs/promises";
+import { join } from "path";
+import { existsSync } from "fs";
+
+// Maximum file size: 10MB / Maksimum fayl ölçüsü: 10MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+// Allowed file types / İcazə verilən fayl tipləri
+const ALLOWED_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp'
+];
 
 /**
  * Seller Signup API / Satıcı Qeydiyyat API
@@ -78,10 +93,67 @@ export async function POST(req: Request) {
     // Validate files / Faylları yoxla
     if (!businessLicense || !taxCertificate) {
       return NextResponse.json(
-        { error: "Business license and tax certificate are required" },
+        { 
+          error: "Business license and tax certificate are required / Biznes lisenziyası və vergi şəhadətnaməsi tələb olunur",
+          errorAz: "Biznes lisenziyası və vergi şəhadətnaməsi tələb olunur"
+        },
         { status: 400 }
       );
     }
+
+    // Validate file sizes / Fayl ölçülərini yoxla
+    if (businessLicense.size > MAX_FILE_SIZE || taxCertificate.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { 
+          error: `File size must be less than ${MAX_FILE_SIZE / 1024 / 1024}MB / Fayl ölçüsü ${MAX_FILE_SIZE / 1024 / 1024}MB-dan az olmalıdır`,
+          errorAz: `Fayl ölçüsü ${MAX_FILE_SIZE / 1024 / 1024}MB-dan az olmalıdır`
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate file types / Fayl tiplərini yoxla
+    if (!ALLOWED_TYPES.includes(businessLicense.type) || !ALLOWED_TYPES.includes(taxCertificate.type)) {
+      return NextResponse.json(
+        { 
+          error: "Invalid file type. Allowed types: PDF, JPEG, PNG, WEBP / Yanlış fayl tipi. İcazə verilən tiplər: PDF, JPEG, PNG, WEBP",
+          errorAz: "Yanlış fayl tipi. İcazə verilən tiplər: PDF, JPEG, PNG, WEBP"
+        },
+        { status: 400 }
+      );
+    }
+
+    // Determine seller type from form data (default: SUPER_SELLER) / Form məlumatından satıcı tipini təyin et (varsayılan: SUPER_SELLER)
+    const sellerType = (formData.get("sellerType") as string) || "SUPER_SELLER";
+
+    // Save uploaded files to storage / Yüklənən faylları storage-a saxla
+    const uploadsDir = join(process.cwd(), 'public', 'uploads', 'seller-documents');
+    
+    // Create uploads directory if it doesn't exist / Uploads qovluğunu yoxdursa yarat
+    if (!existsSync(uploadsDir)) {
+      await mkdir(uploadsDir, { recursive: true });
+    }
+
+    // Generate unique file names / Unikal fayl adları yarat
+    const timestamp = Date.now();
+    const businessLicenseExt = businessLicense.name.split('.').pop() || 'pdf';
+    const taxCertificateExt = taxCertificate.name.split('.').pop() || 'pdf';
+    const businessLicenseFileName = `business-license-${timestamp}.${businessLicenseExt}`;
+    const taxCertificateFileName = `tax-certificate-${timestamp}.${taxCertificateExt}`;
+    
+    const businessLicensePath = join(uploadsDir, businessLicenseFileName);
+    const taxCertificatePath = join(uploadsDir, taxCertificateFileName);
+
+    // Convert File to Buffer and save / File-i Buffer-ə çevir və saxla
+    const businessLicenseBuffer = Buffer.from(await businessLicense.arrayBuffer());
+    const taxCertificateBuffer = Buffer.from(await taxCertificate.arrayBuffer());
+
+    await writeFile(businessLicensePath, businessLicenseBuffer);
+    await writeFile(taxCertificatePath, taxCertificateBuffer);
+
+    // Generate file URLs / Fayl URL-ləri yarat
+    const businessLicenseUrl = `/uploads/seller-documents/${businessLicenseFileName}`;
+    const taxCertificateUrl = `/uploads/seller-documents/${taxCertificateFileName}`;
 
     // Create seller user / Seller istifadəçi yarat
     const seller = await db.user.create({
@@ -89,28 +161,29 @@ export async function POST(req: Request) {
         name: validatedData.name,
         email: validatedData.email,
         phone: validatedData.phone,
-        // password: hashedPassword, // Password field not in schema
-        role: "SELLER",
+        passwordHash: hashedPassword, // Password hash / Şifrə hash-i
+        role: sellerType === "SUPER_SELLER" ? "SUPER_SELLER" : sellerType === "USER_SELLER" ? "USER_SELLER" : "SELLER",
+        sellerType: sellerType, // SUPER_SELLER or USER_SELLER / SUPER_SELLER və ya USER_SELLER
         isActive: true,
-        // Add seller-specific fields if needed
-        // businessName: validatedData.businessName,
-        // businessType: validatedData.businessType,
-        // businessAddress: validatedData.businessAddress,
-        // businessDescription: validatedData.businessDescription,
+        isApprovedByAdmin: false, // Admin təsdiqi gözləyir (Super Seller üçün) / Admin approval pending (for Super Sellers)
+        // Business information / Biznes məlumatları
+        businessName: validatedData.businessName,
+        businessType: validatedData.businessType,
+        businessAddress: validatedData.businessAddress,
+        businessDescription: validatedData.businessDescription,
+        // Business documents / Biznes sənədləri
+        businessLicense: businessLicenseUrl,
+        taxCertificate: taxCertificateUrl,
       },
     });
 
-    // TODO: Save uploaded files to storage / Yüklənən faylları storage-a saxla
-    // This would typically involve uploading to AWS S3, Cloudinary, etc.
-    // Bu adətən AWS S3, Cloudinary və s. yükləməni əhatə edir
-
-    // Remove password from response / Cavabdan şifrəni çıxar
-    // const { password, ...sellerWithoutPassword } = seller;
+    // Remove password hash from response / Cavabdan şifrə hash-ini çıxar
+    const { passwordHash, ...sellerWithoutPassword } = seller;
 
     return NextResponse.json(
       {
-        message: "Seller account created successfully",
-        user: seller,
+        message: "Seller account created successfully. Waiting for admin approval. / Satıcı hesabı uğurla yaradıldı. Admin təsdiqi gözləyir.",
+        user: sellerWithoutPassword,
       },
       { status: 201 }
     );
@@ -119,13 +192,25 @@ export async function POST(req: Request) {
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Validation failed", details: error.issues },
+        { 
+          error: "Validation failed / Yoxlama uğursuz oldu",
+          errorAz: "Yoxlama uğursuz oldu",
+          details: error.issues.map(issue => ({
+            path: issue.path.join('.'),
+            message: issue.message,
+            messageAz: issue.message, // Can be enhanced with specific translations / Xüsusi tərcümələrlə təkmilləşdirilə bilər
+          }))
+        },
         { status: 400 }
       );
     }
 
     return NextResponse.json(
-      { error: "Failed to create seller account" },
+      { 
+        error: "Failed to create seller account / Satıcı hesabı yaratmaq uğursuz oldu",
+        errorAz: "Satıcı hesabı yaratmaq uğursuz oldu",
+        details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+      },
       { status: 500 }
     );
   }
